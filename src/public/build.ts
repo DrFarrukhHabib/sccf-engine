@@ -35,6 +35,17 @@ const longDate = (iso: string) => {
   return `${d} ${MONTHS[m - 1]} ${y}`;
 };
 
+/** Card footer: approval (or preliminary) line, review date, disclaimer, attribution. */
+export const footerFor = (approvedAt: string | null, lastReviewed: string): string =>
+  [
+    approvedAt
+      ? `Approved by a Shariah Scholar on ${longDate(approvedAt)}.`
+      : "Preliminary: prepared with AI and not yet reviewed by a Shariah Scholar; it may contain errors.",
+    `Last reviewed ${longDate(lastReviewed)}.`,
+    "This is a Shariah opinion, not investment advice.",
+    "Powered by Azka Advisors.",
+  ].join(" ");
+
 const tileNo = (c: Check | undefined) => (c?.tile ? Number(c.tile[0]) : 0);
 
 function findCheck(catalog: Catalog, id: string): Check {
@@ -84,14 +95,7 @@ export function buildPublic(catalog: Catalog, outcome: Outcome, asset: PublicAss
     return { title, result: "Pass", line: PASS_LINES[i] };
   }) as PublicCard["tiles"];
 
-  const footer = [
-    asset.approvedAt
-      ? `Approved by a Shariah Scholar on ${longDate(asset.approvedAt)}.`
-      : "Preliminary: prepared with AI and not yet reviewed by a Shariah Scholar; it may contain errors.",
-    `Last reviewed ${longDate(asset.lastReviewed)}.`,
-    "This is a Shariah opinion, not investment advice.",
-    "Powered by Azka Advisors.",
-  ].join(" ");
+  const footer = footerFor(asset.approvedAt, asset.lastReviewed);
 
   const card: PublicCard = { statusLabel, usageLine: matrix.condition, tiles, activity: strip(matrix), footer };
   if (outcome.status === "Haram") card.activity = strip(HARAM);
