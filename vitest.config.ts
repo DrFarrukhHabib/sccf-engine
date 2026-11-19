@@ -8,7 +8,7 @@ export default defineConfig(async () => {
       cloudflareTest({
         wrangler: { configPath: "./wrangler.toml" },
         miniflare: {
-          bindings: { TEST_MIGRATIONS: migrations, ANALYST_KEY: "test-analyst-key" },
+          bindings: { TEST_MIGRATIONS: migrations, ANALYST_KEY: "test-analyst-key" }, d1Databases: ["RESTORE_DB"],
         },
       }),
     ],
