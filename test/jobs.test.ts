@@ -77,3 +77,9 @@ describe("daily jobs", () => {
     expect(await env.BACKUPS.get(report.backupKey)).not.toBeNull();
   });
 });
+
+it("runs without a backup bucket and says so", async () => {
+  const report = await runDaily({ DB: db } as any, { listings: async () => [], writeRegister: async () => {} });
+  expect(report.backupKey).toBe("");
+  expect(report.errors).toContain("backup: no BACKUPS bucket is bound");
+});

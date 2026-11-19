@@ -8,7 +8,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "import-catalog": "tsx scripts/import-catalog.ts",
-    "migrate-from-desk": "tsx scripts/migrate-from-desk.ts"
+    "migrate-from-desk": "tsx scripts/migrate-from-desk.ts",
+    "deploy:cf": "wrangler d1 migrations apply sccf --remote && tsx scripts/import-catalog.ts test/fixtures/catalog-v1.json > catalog.sql && wrangler d1 execute sccf --remote --file catalog.sql && wrangler deploy"
   },
   "dependencies": {
     "hono": "^4.13.19"

@@ -12,7 +12,8 @@ export type Bindings = {
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
   DESK_EMAIL?: string;
-  BACKUPS: R2Bucket;
+  /** R2 bucket for daily backups; until it exists the job reports that no backup was made. */
+  BACKUPS?: R2Bucket;
   /** Service-account JSON and sheet for the Asset Register sync, until Najm reads the API. */
   GOOGLE_SA_JSON?: string;
   REGISTER_SHEET_ID?: string;

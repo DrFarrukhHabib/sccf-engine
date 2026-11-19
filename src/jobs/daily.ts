@@ -84,7 +84,7 @@ export async function restoreExport(db: D1Database, dump: Dump): Promise<void> {
 }
 
 export interface JobEnv {
-  DB: D1Database; BACKUPS: R2Bucket; CMC_API_KEY?: string;
+  DB: D1Database; BACKUPS?: R2Bucket; CMC_API_KEY?: string;
   GOOGLE_SA_JSON?: string; REGISTER_SHEET_ID?: string; REGISTER_TAB?: string;
 }
 export interface JobDeps { listings?: () => Promise<Listing[]>; writeRegister?: (rows: unknown[][]) => Promise<void> }
@@ -101,6 +101,10 @@ export async function runDaily(env: JobEnv, deps: JobDeps = {}) {
   const write = deps.writeRegister ??
     (env.GOOGLE_SA_JSON && env.REGISTER_SHEET_ID ? sheetWriter(env.GOOGLE_SA_JSON, env.REGISTER_SHEET_ID, env.REGISTER_TAB ?? "Engine sync") : undefined);
   if (write) await step("register", async () => { report.registerRows = await syncRegister(env.DB, write); });
+  if (!env.BACKUPS) {
+    report.errors.push("backup: no BACKUPS bucket is bound");
+    return report;
+  }
   const dump = await exportAll(env.DB);
   report.backupKey = `exports/${dump.exportedAt.slice(0, 10)}/${dump.exportedAt}.json`;
   await env.BACKUPS.put(report.backupKey, JSON.stringify(dump), { httpMetadata: { contentType: "application/json" } });
