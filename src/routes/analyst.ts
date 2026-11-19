@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { loadCatalog } from "../catalog/load";
-import type { Answer, Code } from "../db/types";
+import type { Answer, Code, Status } from "../db/types";
 import { fetchListings, type Listing } from "../market/cmc";
 import { buildPublic } from "../public/build";
 import { assertPublicSafe } from "../public/guard";
@@ -63,6 +63,23 @@ interface DraftBody {
   supersedes?: string;
   publicFields: { what: string; why?: string; how?: string; know?: string };
   cardUrl?: string;
+  /** Wrapped tokens (WRAP-4, WRAP-5): the asset whose approved ruling they take. */
+  underlyingAssetId?: string;
+  /** WRAP-4: the added feature's own table (yield through LST, rewards through REWARD). */
+  feature?: { section: string; answers: Record<string, Answer>; codes?: Record<string, Code> };
+}
+
+const SEVERITY: Record<string, number> = { Halal: 0, "Check the company": 1, Doubtful: 2, Haram: 3 };
+/** The stricter of two results: the more severe status, then the higher code within it. */
+const stricter = (a: { status: Status; code: Code }, b: { status: Status; code: Code }) =>
+  SEVERITY[b.status] > SEVERITY[a.status] || (b.status === a.status && b.code > a.code) ? b : a;
+
+async function approvedRuling(db: D1Database, assetId: string) {
+  return db.prepare(
+    `SELECT r.status, r.code FROM rulings r JOIN signatures s ON s.ruling_id = r.id AND s.role IN ('approved', 'standing')
+     WHERE r.asset_id = ? AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ruling_id = r.id AND e.type = 'Return')
+     ORDER BY s.at DESC LIMIT 1`,
+  ).bind(assetId).first<{ status: Status; code: Code }>();
 }
 
 analyst.post("/drafts", async (c) => {
@@ -71,6 +88,10 @@ analyst.post("/drafts", async (c) => {
   const asset = await db.prepare("SELECT id FROM assets WHERE id = ?").bind(b.assetId).first();
   if (!asset) return c.json(fail(`Unknown asset ${b.assetId}`), 422);
 
+  if (b.supersedes) {
+    const prev = await db.prepare("SELECT asset_id FROM rulings WHERE id = ?").bind(b.supersedes).first<{ asset_id: string }>();
+    if (!prev || prev.asset_id !== b.assetId) return c.json(fail(`supersedes must name an earlier ruling of ${b.assetId}`), 422);
+  }
   const catalog = await loadCatalog(db, "1.0");
   let outcome;
   try {
@@ -78,6 +99,23 @@ analyst.post("/drafts", async (c) => {
     for (const r of b.rewards ?? []) outcome.rewardRulings.push(...deriveOutcome(catalog, r.section, r.answers).rewardRulings);
   } catch (e) {
     return c.json(fail((e as Error).message), 422);
+  }
+  if (outcome.route === "UNDERLYING" || outcome.route === "UNDERLYING_AND_FEATURE") {
+    const under = b.underlyingAssetId ? await approvedRuling(db, b.underlyingAssetId) : null;
+    if (!under) return c.json(fail("A wrapped token needs underlyingAssetId with an approved ruling"), 422);
+    let result = under;
+    if (outcome.route === "UNDERLYING_AND_FEATURE") {
+      if (!b.feature) return c.json(fail("WRAP-4: submit the added feature's table in `feature`"), 422);
+      let f;
+      try { f = deriveOutcome(catalog, b.feature.section, b.feature.answers, b.feature.codes); }
+      catch (e) { return c.json(fail((e as Error).message), 422); }
+      outcome.rewardRulings.push(...f.rewardRulings);
+      if (f.status && f.code) result = stricter(under, { status: f.status, code: f.code });
+      else if (f.route || f.sendToScholar) outcome.sendToScholar = true;
+    }
+    outcome.status = result.status;
+    outcome.code = result.code;
+    delete outcome.route;
   }
   if (outcome.route) return c.json(fail(`This table routes to ${outcome.route}: submit the answers for that table`), 422);
   if (!outcome.status || !outcome.code) return c.json(fail("No status or code could be derived: raise a question for the Scholar"), 422);
@@ -94,6 +132,7 @@ analyst.post("/drafts", async (c) => {
   const id = crypto.randomUUID();
   const allAnswers: Record<string, Answer> = { ...b.answers };
   for (const r of b.rewards ?? []) Object.assign(allAnswers, r.answers);
+  if (b.feature) Object.assign(allAnswers, b.feature.answers);
   const reviewType = b.supersedes ? "Re-review" : "First";
 
   await db.batch([

@@ -137,3 +137,45 @@ describe("CoinMarketCap client", () => {
     await expect(fetchListings("bad", 10, fake)).rejects.toThrow(/401/);
   });
 });
+
+describe("wrapped tokens take the underlying's ruling", () => {
+  beforeAll(async () => {
+    await db.batch([
+      db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class) VALUES ('SCCF-0013', 'Bitcoin', 'BTC', 'NATIVE')"),
+      db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class) VALUES ('SCCF-0113', 'Wrapped Bitcoin', 'WBTC', 'WRAP')"),
+      db.prepare("INSERT OR IGNORE INTO rulings (id, asset_id, criteria_version, status, code, created_at) VALUES ('BTC-1', 'SCCF-0013', '1.0', 'Halal', 'H1', '2026-10-30')"),
+      db.prepare("INSERT INTO signatures (ruling_id, role, by_whom, at) VALUES ('BTC-1', 'approved', 'Dr. Farrukh Habib', '2026-10-30T00:00:00Z')"),
+    ]);
+  });
+  const wbtc = {
+    assetId: "SCCF-0113", section: "WRAP", confidence: "Medium", underlyingAssetId: "SCCF-0013",
+    answers: { "WRAP-1": "no", "WRAP-2": "no", "WRAP-3": "no", "WRAP-4": "no", "WRAP-OUT": "no" },
+    publicFields: { what: "a version of bitcoin on Ethereum, backed one-for-one" },
+  };
+
+  it("WRAP-5 stores the underlying's approved status and code", async () => {
+    const res = await post("/analyst/drafts", wbtc);
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body).toMatchObject({ status: "Halal", code: "H1", decidingCheckId: "WRAP-5" });
+    const card = JSON.parse((await db.prepare("SELECT card_json FROM public_fields WHERE ruling_id = ?").bind(body.rulingId).first<{ card_json: string }>())!.card_json);
+    expect(card.tiles.every((t: any) => t.line.length > 0)).toBe(true);
+  });
+
+  it("WRAP-4 takes the stricter of the underlying and the added feature", async () => {
+    const res = await post("/analyst/drafts", { ...wbtc, answers: { ...wbtc.answers, "WRAP-4": "yes" }, feature: { section: "LST", answers: { "LST-1": "yes" } } });
+    expect(res.status).toBe(201);
+    expect((await res.json()) as any).toMatchObject({ status: "Haram", code: "R1", decidingCheckId: "WRAP-4" });
+  });
+
+  it("refuses a wrapped token whose underlying has no approved ruling", async () => {
+    const res = await post("/analyst/drafts", { ...wbtc, underlyingAssetId: "SCCF-0104" });
+    expect(res.status).toBe(422);
+  });
+});
+
+it("refuses a re-review that supersedes another asset's ruling", async () => {
+  const res = await post("/analyst/drafts", { ...usdcDraft, supersedes: "BTC-1" });
+  expect(res.status).toBe(422);
+  expect(((await res.json()) as any).error).toMatch(/supersedes/);
+});

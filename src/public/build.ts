@@ -27,7 +27,7 @@ export interface PublicAsset {
 const TITLES = ["Is it an asset?", "What it is", "Core Shariah test", "Rewards and use"] as const;
 const NOT_ASSESSED = "Not assessed: the ruling is already decided";
 const NOT_APPLICABLE = "Not applicable: do not hold this token";
-const PASS_LINES = ["Yes. It has value and can be owned and transferred.", "", "", "No special conditions on rewards or use."];
+const PASS_LINES = ["Yes. It has value and can be owned and transferred.", "", "No concern was found in its design or business.", "No special conditions on rewards or use."];
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const longDate = (iso: string) => {
