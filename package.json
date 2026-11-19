@@ -1,0 +1,26 @@
+{
+  "name": "sccf-engine",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "import-catalog": "tsx scripts/import-catalog.ts",
+    "migrate-from-desk": "tsx scripts/migrate-from-desk.ts",
+    "deploy:cf": "wrangler d1 migrations apply sccf --remote && tsx scripts/import-catalog.ts test/fixtures/catalog-v1.json > catalog.sql && wrangler d1 execute sccf --remote --file catalog.sql && wrangler deploy"
+  },
+  "dependencies": {
+    "hono": "^4.13.19"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.8.5",
+    "@cloudflare/workers-types": "^5.20261119.1",
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.165.0"
+  }
+}
