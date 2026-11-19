@@ -1,6 +1,6 @@
 import type { CatalogFile } from "./load";
 
-const q = (v: string | number | null | undefined): string =>
+export const q = (v: string | number | null | undefined): string =>
   v === null || v === undefined ? "NULL" : typeof v === "number" ? String(v) : `'${v.replace(/'/g, "''")}'`;
 
 /** One SQL script that loads a catalog version, for `wrangler d1 execute --file`. */
