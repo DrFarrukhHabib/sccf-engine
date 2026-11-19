@@ -120,3 +120,27 @@ describe("standingConfirm", () => {
     await expect(standingConfirm(db, await ruling({ supersedes: prev, structured: 0 }))).rejects.toThrow(/structured/);
   });
 });
+
+describe("standingConfirm compares the stored checks", () => {
+  const answer = (id: string, check: string, a: string) =>
+    db.prepare("INSERT INTO ruling_checks (ruling_id, check_id, answer) VALUES (?, ?, ?)").bind(id, check, a).run();
+
+  it("refuses when a stored answer changed, even with the same outcome", async () => {
+    const prev = await ruling();
+    await answer(prev, "FIAT-4", "no");
+    await approve(db, prev, "Shariah Scholar");
+    const id = await ruling({ supersedes: prev });
+    await answer(id, "FIAT-4", "not_found");
+    await expect(standingConfirm(db, id)).rejects.toThrow(/FIAT-4/);
+  });
+
+  it("confirms when the stored answers match", async () => {
+    const prev = await ruling();
+    await answer(prev, "FIAT-4", "no");
+    await approve(db, prev, "Shariah Scholar");
+    const id = await ruling({ supersedes: prev });
+    await answer(id, "FIAT-4", "no");
+    await standingConfirm(db, id);
+    expect(await isPublic(db, id)).toBe(true);
+  });
+});

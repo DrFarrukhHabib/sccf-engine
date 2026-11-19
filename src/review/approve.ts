@@ -1,4 +1,5 @@
-import type { RulingRow } from "../db/types";
+import type { Answer, RulingRow } from "../db/types";
+import { compare } from "./compare";
 
 export class Refused extends Error {}
 
@@ -74,5 +75,18 @@ export async function standingConfirm(db: D1Database, rulingId: string): Promise
     .bind(r.id, r.asset_id)
     .first();
   if (open) throw new Refused("There is an open question for the Scholar");
+
+  const checksOf = async (id: string) =>
+    (await db.prepare("SELECT check_id, answer, source_url FROM ruling_checks WHERE ruling_id = ?").bind(id)
+      .all<{ check_id: string; answer: Answer; source_url: string | null }>()).results;
+  const [before, now_] = [await checksOf(prev.id), await checksOf(r.id)];
+  const diff = compare(
+    { status: prev.status, code: prev.code, checksStructured: !!prev.checks_structured, rewardRulings: [],
+      checks: before.map((c) => ({ checkId: c.check_id, answer: c.answer, sourceUrl: c.source_url })) },
+    { answers: Object.fromEntries(now_.map((c) => [c.check_id, c.answer])),
+      outcome: { status: r.status, code: r.code, decidingCheckId: r.deciding_check, sendToScholar: false, useConditions: [], rewardRulings: [] } },
+  );
+  if (diff.needsScholar)
+    throw new Refused(`Answers changed since the earlier ruling: ${diff.changes.map((c) => `${c.checkId} ${c.from} to ${c.to}`).join(", ") || "earlier ruling has no structured checks"}`);
   await sign(db, r, "standing", "Standing approval", "Confirmed under standing approval: no change");
 }
