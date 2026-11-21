@@ -6,7 +6,7 @@
 - Cloudflare: Worker `sccf-engine`, D1 database `sccf`, R2 bucket `sccf-backups`, daily job at 03:17 UTC.
 - Deploys: every merge to `main` deploys automatically (deploy command `npm run deploy:cf`).
 
-Setup status (see `docs/switch-over.md`): database, catalog, backups and the CoinMarketCap key are done. Still to do: Cloudflare Access for the desk, the analyst key, the migration from the Review Desk, and the pilot.
+Setup status (see `docs/switch-over.md`): database, catalog, backups, the CoinMarketCap key, Cloudflare Access for the desk, and the migration from the Review Desk (21 November 2026: 165 assets, 85 approved rulings, 9 drafts) are done. Still to do: the analyst key, a restore test, and the pilot.
 
 
 The Shariah screening engine behind SCCF rulings: the rulings database, the Scholar's review desk, the AI analyst's write access and the read-only client API. Powered by Azka Advisors.
