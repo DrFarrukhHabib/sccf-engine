@@ -9,10 +9,9 @@ database_name = "sccf"
 database_id = "35755f80-bcef-41d3-b026-c3b83a8e1ee5"
 migrations_dir = "migrations"
 
-# Backups: uncomment once the R2 bucket "sccf-backups" exists.
-# [[r2_buckets]]
-# binding = "BACKUPS"
-# bucket_name = "sccf-backups"
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "sccf-backups"
 
 [triggers]
 crons = ["17 3 * * *"]
