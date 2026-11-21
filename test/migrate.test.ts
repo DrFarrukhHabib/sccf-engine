@@ -95,7 +95,28 @@ describe("migration from the Review Desk", () => {
 
   it("renders the same statements as an SQL file", () => {
     const sql = statementsToSql(deskToStatements(input).statements);
-    expect(sql).toContain("INSERT INTO assets");
+    expect(sql).toContain("INSERT OR IGNORE INTO assets");
     expect(sql).toContain("'A token you receive for staking SOL with Jito''s staking pool on Solana.'");
+  });
+});
+
+describe("migration from the Asset Register export (reclassifications already applied)", () => {
+  it("rebuilds BIO's history from its register row and maps the new class names", () => {
+    const tokens = input.tokens.map((t) =>
+      t.assetId === "SCCF-0012" ? { ...t, cls: "Launchpad", code: "H2" }
+      : t.assetId === "SCCF-0098" ? { ...t, cls: "Exchange token (DEX)" }
+      : t.assetId === "SCCF-0049" || t.assetId === "SCCF-0090" ? { ...t, cls: "Liquid staking token" } : t);
+    const sql = deskToStatements({ ...input, tokens }).statements;
+    const bio = sql.filter((s) => s.sql.includes("INTO rulings") && s.params[1] === "SCCF-0012").map((s) => [s.params[0], s.params[4], s.params[3]]);
+    expect(bio).toEqual([["MIG-SCCF-0012", "EXCH", "H1"], ["MIG-SCCF-0012-R2", "LAUNCH", "H2"]]);
+    const cls = (id: string) => sql.find((s) => s.sql.includes("INTO assets") && s.params[0] === id)!.params[4];
+    expect([cls("SCCF-0098"), cls("SCCF-0049"), cls("SCCF-0090")]).toEqual(["EXCH", "LST", "LST"]);
+  });
+
+  it("is safe to run twice", async () => {
+    const out = deskToStatements(input);
+    await expect(db.batch(out.statements.map((s) => db.prepare(s.sql).bind(...s.params)))).resolves.toBeDefined();
+    expect((await db.prepare("SELECT COUNT(*) AS n FROM rulings WHERE id LIKE 'MIG-%'").first<{ n: number }>())!.n).toBe(6);
+    expect((await db.prepare("SELECT COUNT(*) AS n FROM events WHERE type != 'Migration'").first<{ n: number }>())!.n).toBe(input.history.length - 1);
   });
 });
