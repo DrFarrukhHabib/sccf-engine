@@ -1,5 +1,14 @@
 # SCCF Engine
 
+## Live
+
+- Engine: https://sccf-engine.doctorfarrukhhabib.workers.dev (health check: `/health`)
+- Cloudflare: Worker `sccf-engine`, D1 database `sccf`, R2 bucket `sccf-backups`, daily job at 03:17 UTC.
+- Deploys: every merge to `main` deploys automatically (deploy command `npm run deploy:cf`).
+
+Setup status (see `docs/switch-over.md`): database, catalog, backups and the CoinMarketCap key are done. Still to do: Cloudflare Access for the desk, the analyst key, the migration from the Review Desk, and the pilot.
+
+
 The Shariah screening engine behind SCCF rulings: the rulings database, the Scholar's review desk, the AI analyst's write access and the read-only client API. Powered by Azka Advisors.
 
 ## For the Shariah Scholar
