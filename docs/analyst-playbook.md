@@ -46,6 +46,38 @@ If the engine answers `422` because the table routes elsewhere (for example FIAT
 
 The engine marks a draft for the Scholar when a judgment row says yes, the outcome has no single code, or no row fits. Re-reviews are confirmed under standing approval only when nothing changed: same status and code, same answers, no open question, confidence not Low, not D1, and an earlier ruling with structured checks. Everything else waits on the desk.
 
+## Standing decisions of the Shariah Scholar (apply them when answering checks; do not reopen them)
+
+Carried over unchanged from the old worker playbook at the 24 November 2026 switch-over.
+
+- **Stablecoins:**
+  - Each stablecoin is its own genus: spot exchange only, at any agreed rate.
+  - Issuer disclaimers like "not a claim, deposit or debt obligation" are legal wording, not a Shariah issue.
+  - Reserve interest earned at issuer level does not taint the token.
+- **Rewards on stablecoins:**
+  - An interest-based reward paid by the issuer or brand owner (PYUSD, USDC through Coinbase, USDG partner rewards) is not halal; the coin is unaffected if the reward can be separated from the coin.
+  - Interest that every holder earns automatically and cannot separate makes the token Haram R1.
+  - Third-party interest rewards are not halal, and the coin is unaffected.
+  - A reward that does not come from interest is a promotional gift and halal.
+- **Gold and silver:**
+  - Gold tokens are one genus with the metal: equal weight, spot.
+  - Unallocated gold or silver (a general entitlement) is Haram R1 (AAOIFI SS 57; provisional). Joint ownership of a specified pool is fine.
+  - Metal that is lent, including market "gold leasing" for a fee, is R1. A true ijarah lease is permissible.
+- **Wrapped tokens** take the underlying's ruling and code unless they add a feature such as yield (WBTC is H1).
+- **Staking:**
+  - If depositors' assets are lent at interest, the token is R1 whatever the interest's share (autoETH precedent). This includes when the interest reaching holders is unconfirmed but the depositors' assets are lent (sfrxETH, decided 13 November 2026).
+  - Restaking pay from a haram service is haram.
+- **Native coins** such as BTC and ETH are non-monetary digital assets, not money. A foundation's marketing of interest-based products does not by itself make a neutral chain's coin Doubtful when the coin's value is not shown to depend on them (answer of 15 November 2026 on Algorand, Avalanche and Cosmos; a rule proposal to write this into native coins row 2 awaits the Scholar).
+
+## Public fields: wording rules
+
+- Plain words for ordinary people.
+- No codes, rule numbers or row numbers.
+- No exact figures: describe them against the limit ("well within the tolerable limit").
+- Say "AI", never tool or product names. Say "a Shariah Scholar", never his name.
+- Never mention earlier versions, old reports, old criteria, Gemini or v1/v2. The methodology is "SCCF".
+- Never mention giving to charity.
+
 ## Writing rules
 
 US English. Plain, direct sentences. Flag anything recalled from memory rather than checked. Keep each madhhab's position, AAOIFI, and your own inference separate.
