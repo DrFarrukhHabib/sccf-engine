@@ -7,8 +7,6 @@ import { assertPublicSafe } from "../public/guard";
 import { deriveOutcome } from "../rules/derive";
 import type { Bindings } from "../index";
 
-/** Playbook "Next batch" class order. Classes not listed come last. */
-const CLASS_ORDER = ["NATIVE", "EXCH", "UTIL", "FIAT", "CRYPTO", "MEME"];
 const BATCH = 15;
 /** Analysts may log these; approvals and returns come only from the review desk. */
 const ANALYST_EVENTS = ["First", "Re-review", "Trigger", "Migration", "Note"];
@@ -46,9 +44,17 @@ analyst.get("/catalog", async (c) => {
 
 analyst.get("/queue", async (c) => {
   const db = c.env.DB;
-  const order = `CASE class ${CLASS_ORDER.map((k, i) => `WHEN '${k}' THEN ${i}`).join(" ")} ELSE ${CLASS_ORDER.length} END`;
+  // Highest market cap first, from the newest CoinMarketCap snapshot (by id, else by ticker); unranked assets last, in register order.
   const firstReviews = await db
-    .prepare(`SELECT id, name, ticker, class FROM assets WHERE id NOT IN (SELECT asset_id FROM rulings) ORDER BY ${order}, id LIMIT ?`)
+    .prepare(
+      `SELECT id, name, ticker, class, (
+         SELECT MIN(m.rank) FROM market_snapshots m
+         WHERE m.taken_at = (SELECT MAX(taken_at) FROM market_snapshots)
+           AND (m.cmc_id = assets.cmc_id OR UPPER(m.symbol) = UPPER(assets.ticker))
+       ) AS market_rank
+       FROM assets WHERE id NOT IN (SELECT asset_id FROM rulings)
+       ORDER BY market_rank IS NULL, market_rank, id LIMIT ?`,
+    )
     .bind(BATCH).all();
   const reReviews = await db
     .prepare("SELECT id, name, ticker, class, next_review FROM assets WHERE next_review IS NOT NULL AND next_review <= date('now', '+30 days') ORDER BY next_review, id LIMIT ?")

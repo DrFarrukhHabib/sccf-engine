@@ -138,9 +138,21 @@ describe("analyst door", () => {
     expect(body.map((r) => r.id)).toEqual(["req-1"]);
   });
 
-  it("the queue respects the playbook's class order, then register order", async () => {
+  it("with no market ranks yet, the queue falls back to register order", async () => {
     const body = (await (await call("/analyst/queue")).json()) as any;
-    expect(body.firstReviews.map((a: any) => a.id)).toEqual(["SCCF-0201", "SCCF-0203", "SCCF-0202", "SCCF-0200"]);
+    expect(body.firstReviews.map((a: any) => a.id)).toEqual(["SCCF-0200", "SCCF-0201", "SCCF-0202", "SCCF-0203"]);
+  });
+
+  it("the queue puts the highest market cap first, matching by CoinMarketCap id or ticker", async () => {
+    await post("/analyst/snapshot", {
+      listings: [
+        { id: 1027, symbol: "ETH", name: "Ethereum", cmc_rank: 2 },
+        { id: 99999, symbol: "SOL", name: "Solana", cmc_rank: 5 },
+        { id: 74, symbol: "DOGE", name: "Dogecoin", cmc_rank: 9 },
+      ],
+    });
+    const body = (await (await call("/analyst/queue")).json()) as any;
+    expect(body.firstReviews.map((a: any) => a.id)).toEqual(["SCCF-0201", "SCCF-0203", "SCCF-0200", "SCCF-0202"]);
   });
 
   it("after a snapshot, unlisted assets are queued in rank order", async () => {

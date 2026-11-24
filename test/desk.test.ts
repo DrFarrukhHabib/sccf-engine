@@ -159,6 +159,58 @@ describe("desk pages", () => {
     expect(await (await desk("/desk/questions")).text()).not.toContain('action="/desk/questions/Q-1/answer"');
   });
 
+  const draft = (id: string, asset: string, status: string, code: string, confidence = "High") =>
+    db.prepare(`INSERT INTO rulings (id, asset_id, criteria_version, status, code, confidence, review_type, deciding_check, created_at)
+      VALUES (?, ?, '1.0', ?, ?, ?, 'First', 'EXCH-1', '2026-11-24')`).bind(id, asset, status, code, confidence).run();
+
+  it("the queue is a To do list: questions first, then changed drafts, then matching ones", async () => {
+    await db.batch([
+      db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class, old_status, old_code) VALUES ('SCCF-0901', 'Match Coin', 'MAT', 'UTIL', 'Halal', 'H1')"),
+      db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class, old_status, old_code) VALUES ('SCCF-0902', 'Change Coin', 'CHG', 'EXCH', 'Halal', 'H1')"),
+      db.prepare("INSERT OR IGNORE INTO questions (id, asset_id, question) VALUES ('Q-todo', 'SCCF-0902', 'Which table?')"),
+    ]);
+    await draft("D-match", "SCCF-0901", "Halal", "H1");
+    await draft("D-change", "SCCF-0902", "Haram", "R1");
+    const html = await (await desk("/desk/queue")).text();
+    const at = (t: string) => html.indexOf(t);
+    expect(at("Which table?")).toBeGreaterThan(-1);
+    expect(at("Which table?")).toBeLessThan(at("D-change"));
+    expect(at("D-change")).toBeLessThan(at("D-match"));
+    expect(html).toContain("Halal → Haram");
+    expect(html).toContain("Same as before");
+  });
+
+  it("Approve all matching approves only High-confidence matches with no open question", async () => {
+    await db.batch([
+      db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class, old_status, old_code) VALUES ('SCCF-0903', 'Asked Coin', 'ASK', 'UTIL', 'Halal', 'H1')"),
+      db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class, old_status, old_code) VALUES ('SCCF-0904', 'Unsure Coin', 'UNS', 'UTIL', 'Halal', 'H1')"),
+      db.prepare("INSERT OR IGNORE INTO questions (id, asset_id, question) VALUES ('Q-ask', 'SCCF-0903', 'Open point')"),
+    ]);
+    await draft("D-asked", "SCCF-0903", "Halal", "H1");
+    await draft("D-unsure", "SCCF-0904", "Halal", "H1", "Medium");
+    const res = await desk("/desk/approve-matching", form({}));
+    expect(res.status).toBe(303);
+    expect(await isPublic(db, "D-match")).toBe(true);
+    for (const id of ["D-change", "D-asked", "D-unsure"]) expect(await isPublic(db, id)).toBe(false);
+  });
+
+  it("a draft page compares with the old system, shows its open question with an answer box, and links back", async () => {
+    const html = await (await desk("/desk/rulings/D-change")).text();
+    expect(html).toContain("Old system");
+    expect(html).toContain('href="/desk/queue"');
+    expect(html).toContain('action="/desk/questions/Q-todo/answer"');
+    const res = await desk("/desk/questions/Q-todo/answer", form({ answer: "EXCH", back: "/desk/rulings/D-change" }));
+    expect(res.headers.get("Location")).toBe("/desk/rulings/D-change");
+    const off = await desk("/desk/questions/Q-ask/answer", form({ answer: "x", back: "https://evil.example/" }));
+    expect(off.headers.get("Location")).toBe("/desk/questions");
+  });
+
+  it("every page has the menu, including Approved", async () => {
+    for (const p of ["/desk/queue", "/desk/questions", "/desk/library", "/desk/rules", "/desk/keys"]) {
+      expect(await (await desk(p)).text()).toContain('href="/desk/library"');
+    }
+  });
+
   it("lists questions, rule proposals and the library", async () => {
     for (const p of ["/desk/questions", "/desk/rules", "/desk/library"]) expect((await desk(p)).status).toBe(200);
   });
