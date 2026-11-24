@@ -77,6 +77,20 @@ describe("analyst door", () => {
     expect(q).toEqual({ question: "Is DOGE still mainly speculative?", options_json: '["Yes","No"]' });
   });
 
+  it("serves the live catalog so the analyst can read each section's checks", async () => {
+    const all = (await (await call("/analyst/catalog")).json()) as any;
+    expect(all.version).toBe("1.0");
+    const liveFiat = (fixture as any).checks
+      .filter((c: any) => c.id.startsWith("FIAT-") && !/^(Dropped|Replaced)/.test(c.type ?? ""))
+      .map((c: any) => c.id);
+    expect(all.sections.FIAT.map((c: any) => c.id)).toEqual(liveFiat);
+    expect(all.sections.FIAT.map((c: any) => c.id)).toContain("FIAT-6");
+    expect(Object.keys(all.sections.FIAT[0]).sort()).toEqual(["id", "ifNotFound", "ifYes", "judgment", "question", "type"]);
+    const some = (await (await call("/analyst/catalog?section=ZERO,FIAT")).json()) as any;
+    expect(Object.keys(some.sections).sort()).toEqual(["FIAT", "ZERO"]);
+    expect((await app.request("/analyst/catalog", {}, env)).status).toBe(401);
+  });
+
   it("lists open requests", async () => {
     await db.prepare("INSERT OR IGNORE INTO requests (id, type, at) VALUES ('req-1', 'next-batch', '2026-11-19')").run();
     await db.prepare("INSERT OR IGNORE INTO requests (id, type, at, status) VALUES ('req-2', 'run', '2026-11-18', 'done')").run();

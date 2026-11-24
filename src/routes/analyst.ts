@@ -32,6 +32,18 @@ analyst.use("*", async (c, next) => {
   await next();
 });
 
+/** The live check questions, so the analyst answers exactly what the engine derives from. `?section=ZERO,FIAT` narrows it. */
+analyst.get("/catalog", async (c) => {
+  const catalog = await loadCatalog(c.env.DB, "1.0");
+  const wanted = c.req.query("section")?.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  const sections: Record<string, { id: string; type: string; question: string; ifYes: string | null; ifNotFound: string | null; judgment: boolean }[]> = {};
+  for (const [key, checks] of Object.entries(catalog.sections)) {
+    if (wanted && !wanted.includes(key)) continue;
+    sections[key] = checks.map(({ id, type, question, ifYes, ifNotFound, judgment }) => ({ id, type, question, ifYes, ifNotFound, judgment }));
+  }
+  return c.json({ version: catalog.version, sections });
+});
+
 analyst.get("/queue", async (c) => {
   const db = c.env.DB;
   const order = `CASE class ${CLASS_ORDER.map((k, i) => `WHEN '${k}' THEN ${i}`).join(" ")} ELSE ${CLASS_ORDER.length} END`;
