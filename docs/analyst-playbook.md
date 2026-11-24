@@ -48,7 +48,7 @@ The engine marks a draft for the Scholar when a judgment row says yes, the outco
 
 ## Standing decisions of the Shariah Scholar (apply them when answering checks; do not reopen them)
 
-Carried over unchanged from the old worker playbook at the 24 November 2026 switch-over.
+Carried over from the old worker playbook at the 24 November 2026 switch-over. The second sentence on native coins is added from the 15 November 2026 answer recorded on the old dashboard.
 
 - **Stablecoins:**
   - Each stablecoin is its own genus: spot exchange only, at any agreed rate.
