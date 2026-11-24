@@ -144,6 +144,21 @@ describe("desk pages", () => {
     expect(html).toContain("H2");
   });
 
+  it("the questions page has an answer box for open questions, and an answer is saved", async () => {
+    await db.prepare("INSERT OR IGNORE INTO questions (id, asset_id, question, context, options_json) VALUES ('Q-1', 'SCCF-0104', 'Which class?', 'Some context', '[\"EXCH\",\"UTIL\"]')").run();
+    const page = await (await desk("/desk/questions")).text();
+    expect(page).toContain('action="/desk/questions/Q-1/answer"');
+    expect(page).toContain("<textarea");
+    expect(page).toContain("Some context");
+    expect(page).toContain("EXCH");
+    const res = await desk("/desk/questions/Q-1/answer", form({ answer: "UTIL" }));
+    expect(res.status).toBe(303);
+    expect(res.headers.get("Location")).toBe("/desk/questions");
+    const row = await db.prepare("SELECT answer FROM questions WHERE id = 'Q-1'").first<{ answer: string }>();
+    expect(row?.answer).toBe("UTIL");
+    expect(await (await desk("/desk/questions")).text()).not.toContain('action="/desk/questions/Q-1/answer"');
+  });
+
   it("lists questions, rule proposals and the library", async () => {
     for (const p of ["/desk/questions", "/desk/rules", "/desk/library"]) expect((await desk(p)).status).toBe(200);
   });

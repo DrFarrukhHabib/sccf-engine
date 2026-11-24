@@ -14,9 +14,15 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 | `GET /queue` | `firstReviews` (registered assets with no ruling, in class order: native, exchange/governance, utility, stablecoins, meme, rest), `reReviews` (due within 30 days), `unlisted` (top CoinMarketCap assets not yet registered, by rank). Up to 15 each. |
 | `GET /requests` | Open requests from the Scholar (next batch, re-review, card change, new listing). |
 | `POST /drafts` | Submit one review (below). The engine derives the outcome, builds the public card and stores a draft. |
+| `GET /answers` | The Scholar's answers you have not yet acted on: `[{id, assetId, rulingId, question, answer}]`. |
+| `POST /questions/:id/applied` | Mark an answer as acted on, once you have done what it says. |
 | `POST /questions` | A question for the Scholar: `{assetId, question, context, options}`. |
 | `POST /events` | Log a `First`, `Re-review`, `Trigger`, `Migration` or `Note` event. |
 | `POST /snapshot` | Store a CoinMarketCap rank snapshot (`{listings}` or empty to fetch with the engine's key). |
+
+## Start of every run: the Scholar's answers
+
+Before any new work, `GET /answers`. For each answer, do what it says: usually submit a fresh draft for that token that follows the answer (with `supersedes` set to the earlier draft's ruling id), or log a `Note` event if nothing needs to change. Then `POST /questions/:id/applied`. The Scholar's answer is final for that token; never argue it back.
 
 ## One review
 

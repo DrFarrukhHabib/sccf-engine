@@ -120,6 +120,17 @@ describe("analyst door", () => {
     expect((await app.request("/analyst/catalog", {}, env)).status).toBe(401);
   });
 
+  it("the analyst reads answered questions and marks them applied", async () => {
+    await db.prepare("INSERT OR IGNORE INTO questions (id, asset_id, question, answer, answered_at) VALUES ('Q-A', 'SCCF-0104', 'Class?', 'UTIL', '2026-11-24')").run();
+    await db.prepare("INSERT OR IGNORE INTO questions (id, asset_id, question) VALUES ('Q-B', 'SCCF-0104', 'Open one')").run();
+    const before = (await (await call("/analyst/answers")).json()) as any[];
+    expect(before.map((q) => q.id)).toContain("Q-A");
+    expect(before.map((q) => q.id)).not.toContain("Q-B");
+    expect((await post("/analyst/questions/Q-A/applied", {})).status).toBe(200);
+    const after = (await (await call("/analyst/answers")).json()) as any[];
+    expect(after.map((q) => q.id)).not.toContain("Q-A");
+  });
+
   it("lists open requests", async () => {
     await db.prepare("INSERT OR IGNORE INTO requests (id, type, at) VALUES ('req-1', 'next-batch', '2026-11-19')").run();
     await db.prepare("INSERT OR IGNORE INTO requests (id, type, at, status) VALUES ('req-2', 'run', '2026-11-18', 'done')").run();

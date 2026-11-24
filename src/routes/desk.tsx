@@ -5,7 +5,7 @@ import type { Answer } from "../db/types";
 import { approve, Refused, returnWithNote } from "../review/approve";
 import { compare } from "../review/compare";
 import type { Bindings } from "../index";
-import { CardPage, KeysPage, ListPage, QueuePage, RulingPage } from "../views/pages";
+import { CardPage, KeysPage, ListPage, QuestionsPage, QueuePage, RulingPage } from "../views/pages";
 
 export interface DeskOptions {
   config?: (env: Bindings) => AccessConfig;
@@ -82,7 +82,7 @@ export function createDesk(opts: DeskOptions = {}) {
     return c.html(<CardPage r={r} card={JSON.parse(pub.card_json)} />);
   });
 
-  const act = (fn: (db: D1Database, id: string, form: Record<string, string>, by: string) => Promise<void>) => async (c: any) => {
+  const act = (fn: (db: D1Database, id: string, form: Record<string, string>, by: string) => Promise<void>, back = "/desk/queue") => async (c: any) => {
     const form = (await c.req.parseBody()) as Record<string, string>;
     try {
       await fn(c.env.DB, c.req.param("id"), form, c.get("scholar"));
@@ -90,20 +90,23 @@ export function createDesk(opts: DeskOptions = {}) {
       if (e instanceof Refused) return c.text((e as Error).message, 422);
       throw e;
     }
-    return c.redirect("/desk/queue", 303);
+    return c.redirect(back, 303);
   };
   desk.post("/rulings/:id/approve", act((db, id, _f, by) => approve(db, id, by)));
   desk.post("/rulings/:id/return", act((db, id, f) => returnWithNote(db, id, f.note ?? "")));
 
   desk.get("/questions", async (c) => {
-    const { results } = await c.env.DB.prepare("SELECT id, asset_id, question, options_json AS options, answer FROM questions ORDER BY created_at").all();
-    return c.html(<ListPage title="Questions" cols={["id", "asset_id", "question", "options", "answer"]} rows={results} />);
+    const { results } = await c.env.DB.prepare(
+      `SELECT q.id, q.asset_id, a.name AS asset_name, q.question, q.context, q.options_json AS options, q.answer, q.answered_at, q.applied
+       FROM questions q LEFT JOIN assets a ON a.id = q.asset_id ORDER BY q.created_at`,
+    ).all<Record<string, any>>();
+    return c.html(<QuestionsPage open={results.filter((q) => q.answer == null)} answered={results.filter((q) => q.answer != null)} />);
   });
 
   desk.post("/questions/:id/answer", act(async (db, id, f) => {
     if (!f.answer?.trim()) throw new Refused("An answer is required");
     await db.prepare("UPDATE questions SET answer = ?, answered_at = ? WHERE id = ? AND answer IS NULL").bind(f.answer.trim(), new Date().toISOString(), id).run();
-  }));
+  }, "/desk/questions"));
 
   desk.get("/rules", async (c) => {
     const { results } = await c.env.DB.prepare("SELECT id, title, where_text, proposed, decision, applied FROM rule_proposals").all();
