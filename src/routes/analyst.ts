@@ -184,6 +184,20 @@ analyst.post("/questions", async (c) => {
   return c.json({ id }, 201);
 });
 
+/** The Scholar's answers that the analyst has not yet acted on. */
+analyst.get("/answers", async (c) => {
+  const { results } = await c.env.DB.prepare(
+    "SELECT id, asset_id, ruling_id, question, context, answer, answered_at FROM questions WHERE answer IS NOT NULL AND applied = 0 ORDER BY answered_at",
+  ).all();
+  return c.json(results);
+});
+
+analyst.post("/questions/:id/applied", async (c) => {
+  const r = await c.env.DB.prepare("UPDATE questions SET applied = 1 WHERE id = ? AND answer IS NOT NULL").bind(c.req.param("id")).run();
+  if (!r.meta.changes) return c.json(fail("No answered question with that id"), 422);
+  return c.json({ ok: true });
+});
+
 analyst.post("/events", async (c) => {
   const b = await c.req.json<{ assetId: string; rulingId?: string; type: string; detail?: string }>();
   if (!ANALYST_EVENTS.includes(b.type)) return c.json(fail(`Analysts cannot log "${b.type}" events`), 422);

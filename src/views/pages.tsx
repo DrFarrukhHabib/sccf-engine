@@ -99,6 +99,36 @@ export const ListPage = ({ title, cols, rows }: { title: string; cols: string[];
   </Layout>
 );
 
+const optionsOf = (json: string | null): string[] => {
+  try { return json ? (JSON.parse(json) as string[]) : []; } catch { return []; }
+};
+
+export const QuestionsPage = ({ open, answered }: { open: Row[]; answered: Row[] }) => (
+  <Layout title="Questions">
+    <h2>Waiting for your answer ({open.length})</h2>
+    {open.length === 0 && <p>Nothing here.</p>}
+    {open.map((q) => (
+      <div class="question">
+        <p><b>{q.asset_name ? `${q.asset_name} (${q.asset_id})` : q.asset_id ?? "General"}</b></p>
+        <p>{q.question}</p>
+        {q.context && <p class="muted">{q.context}</p>}
+        {optionsOf(q.options).length > 0 && <p>Options offered: {optionsOf(q.options).join(" · ")}</p>}
+        <form method="post" action={`/desk/questions/${q.id}/answer`}>
+          <label>Your answer<br /><textarea name="answer" rows={3} required></textarea></label><br />
+          <button>Save answer</button>
+        </form>
+      </div>
+    ))}
+    <h2>Answered ({answered.length})</h2>
+    <table>
+      <tr><th>Asset</th><th>Question</th><th>Your answer</th><th>Answered</th><th>Acted on by the analyst</th></tr>
+      {answered.map((q) => (
+        <tr><td>{q.asset_id}</td><td>{q.question}</td><td>{q.answer}</td><td>{q.answered_at}</td><td>{q.applied ? "Yes" : "Not yet"}</td></tr>
+      ))}
+    </table>
+  </Layout>
+);
+
 export const KeysPage = ({ clients, newKey, name }: { clients: Row[]; newKey?: string; name?: string }) => (
   <Layout title="Client keys">
     {newKey && (
