@@ -143,11 +143,12 @@ describe("analyst door", () => {
     expect(body.firstReviews.map((a: any) => a.id)).toEqual(["SCCF-0200", "SCCF-0201", "SCCF-0202", "SCCF-0203"]);
   });
 
-  it("the queue puts the highest market cap first, matching by CoinMarketCap id or ticker", async () => {
+  it("the queue puts the highest market cap first, matching by CoinMarketCap id (a ticker clash with another id does not count)", async () => {
     await post("/analyst/snapshot", {
       listings: [
         { id: 1027, symbol: "ETH", name: "Ethereum", cmc_rank: 2 },
-        { id: 99999, symbol: "SOL", name: "Solana", cmc_rank: 5 },
+        { id: 99999, symbol: "UNI", name: "Unrelated Uni", cmc_rank: 3 },
+        { id: 5426, symbol: "SOL", name: "Solana", cmc_rank: 5 },
         { id: 74, symbol: "DOGE", name: "Dogecoin", cmc_rank: 9 },
       ],
     });
@@ -185,6 +186,35 @@ describe("analyst door", () => {
     expect((await post("/analyst/assets", { cmcId: "52", name: "XRP", ticker: "XRP", class: "NATIVE" })).status).toBe(409);
     expect((await post("/analyst/assets", { name: "No class", ticker: "NC" })).status).toBe(422);
     expect((await post("/analyst/assets", { name: "Bad", ticker: "BAD", class: "NOPE" })).status).toBe(422);
+  });
+
+  it("with a frozen wave, the queue follows the wave's ranks, lists its unregistered tokens, and puts top-100 newcomers in the fast lane", async () => {
+    await db.batch([
+      db.prepare("INSERT INTO waves (id, frozen_at, size, snapshot_at) VALUES (1, '2026-11-24T10:00:00Z', 3, '2026-11-24T03:17:00Z')"),
+      db.prepare("INSERT INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 2, '1027', 'ETH', 'Ethereum')"),
+      db.prepare("INSERT INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 5, '777', 'NTK', 'Newtoken')"),
+      db.prepare("INSERT INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 9, '74', 'DOGE', 'Dogecoin')"),
+    ]);
+    await post("/analyst/snapshot", {
+      listings: [
+        { id: 1027, symbol: "ETH", name: "Ethereum", cmc_rank: 2 },
+        { id: 888, symbol: "HOT", name: "Hot Coin", cmc_rank: 50 },
+        { id: 999, symbol: "LATE", name: "Late Coin", cmc_rank: 150 },
+      ],
+    });
+    const q = (await (await call("/analyst/queue")).json()) as any;
+    expect(q.firstReviews.slice(0, 2).map((a: any) => a.id)).toEqual(["SCCF-0201", "SCCF-0200"]);
+    expect(q.unlisted.map((a: any) => a.symbol)).toEqual(["NTK"]);
+    expect(q.fastLane.map((a: any) => a.symbol)).toEqual(["HOT"]);
+  });
+
+  it("the Scholar's token requests come first in the queue and can be marked done", async () => {
+    await db.prepare("INSERT INTO requests (id, type, text, at) VALUES ('tok-1', 'scholar-token', 'USD1 (USD1): from the WLFI answer', '2026-11-24')").run();
+    const q = (await (await call("/analyst/queue")).json()) as any;
+    expect(q.requests.map((r: any) => r.id)).toEqual(["tok-1"]);
+    expect((await post("/analyst/requests/tok-1/done", { result: "Registered as SCCF-0166 and drafted" })).status).toBe(200);
+    expect(((await (await call("/analyst/queue")).json()) as any).requests).toEqual([]);
+    expect((await post("/analyst/requests/nope/done", {})).status).toBe(422);
   });
 });
 

@@ -1,5 +1,6 @@
 import { fetchListings, type Listing } from "../market/cmc";
 import { sheetWriter } from "./sheets";
+import { fastLane } from "../waves";
 
 const now = () => new Date().toISOString();
 const SIGNED = "s.role IN ('approved', 'standing')";
@@ -16,21 +17,13 @@ export async function dueReReviews(db: D1Database) {
   return results;
 }
 
-/** Records a snapshot and queues listings that are not registered assets. Returns the symbols newly queued. */
-export async function queueNewListings(db: D1Database, listings: Listing[]): Promise<string[]> {
+/** Records the nightly ranking. Returns the symbols now in the fast lane (top 100, outside the newest wave, not yet reviewed). */
+export async function recordSnapshot(db: D1Database, listings: Listing[]): Promise<string[]> {
   const at = now();
   for (let i = 0; i < listings.length; i += 50)
     await db.batch(listings.slice(i, i + 50).map((l) =>
       db.prepare("INSERT INTO market_snapshots (taken_at, cmc_id, symbol, name, rank) VALUES (?, ?, ?, ?, ?)").bind(at, String(l.id), l.symbol, l.name, l.cmc_rank)));
-  const known = new Set((await db.prepare("SELECT cmc_id FROM assets WHERE cmc_id IS NOT NULL").all<{ cmc_id: string }>()).results.map((r) => r.cmc_id));
-  const queued: string[] = [];
-  for (const l of listings) {
-    if (known.has(String(l.id))) continue;
-    const r = await db.prepare("INSERT OR IGNORE INTO requests (id, type, text, at) VALUES (?, 'new-listing', ?, ?)")
-      .bind(`listing-${l.id}`, `${l.name} (${l.symbol}), CoinMarketCap rank ${l.cmc_rank}`, at).run();
-    if (r.meta.changes) queued.push(l.symbol);
-  }
-  return queued;
+  return (await fastLane(db)).map((t) => t.symbol);
 }
 
 /** Writes the current approved ruling of every asset through `write`. Returns the row count. */
@@ -91,13 +84,13 @@ export interface JobDeps { listings?: () => Promise<Listing[]>; writeRegister?: 
 
 /** The daily cron. Each step runs on its own; a failure is reported and the backup still runs. */
 export async function runDaily(env: JobEnv, deps: JobDeps = {}) {
-  const report = { due: 0, newListings: 0, registerRows: 0, backupKey: "", errors: [] as string[] };
+  const report = { due: 0, fastLane: 0, registerRows: 0, backupKey: "", errors: [] as string[] };
   const step = async (name: string, fn: () => Promise<void>) => {
     try { await fn(); } catch (e) { report.errors.push(`${name}: ${(e as Error).message}`); }
   };
   await step("re-reviews", async () => { report.due = (await dueReReviews(env.DB)).length; });
   const listings = deps.listings ?? (env.CMC_API_KEY ? () => fetchListings(env.CMC_API_KEY!, 500) : undefined);
-  if (listings) await step("listings", async () => { report.newListings = (await queueNewListings(env.DB, await listings())).length; });
+  if (listings) await step("listings", async () => { report.fastLane = (await recordSnapshot(env.DB, await listings())).length; });
   const write = deps.writeRegister ??
     (env.GOOGLE_SA_JSON && env.REGISTER_SHEET_ID ? sheetWriter(env.GOOGLE_SA_JSON, env.REGISTER_SHEET_ID, env.REGISTER_TAB ?? "Engine sync") : undefined);
   if (write) await step("register", async () => { report.registerRows = await syncRegister(env.DB, write); });

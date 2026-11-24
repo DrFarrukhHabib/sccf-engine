@@ -232,6 +232,42 @@ describe("desk pages", () => {
     expect(page).toMatch(/<script>[^<]*data-fill/);
   });
 
+  it("the To do page shows the wave's progress: approved, drafted, to go", async () => {
+    await db.batch([
+      db.prepare("INSERT OR IGNORE INTO waves (id, frozen_at, size, snapshot_at) VALUES (1, '2026-11-24T10:00:00Z', 3, '2026-11-24T03:17:00Z')"),
+      db.prepare("INSERT OR IGNORE INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 1, 'c-mat', 'MAT', 'Match Coin')"),
+      db.prepare("INSERT OR IGNORE INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 2, 'c-chg', 'CHG', 'Change Coin')"),
+      db.prepare("INSERT OR IGNORE INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 3, 'c-zzz', 'ZZZ', 'Unknown Coin')"),
+    ]);
+    const html = await (await desk("/desk/queue")).text();
+    expect(html).toContain("Wave 1");
+    expect(html).toContain('data-approved="1"');
+    expect(html).toContain('data-drafted="1"');
+    expect(html).toContain('data-togo="1"');
+  });
+
+  it("the Scholar can ask for a token from the desk", async () => {
+    const res = await desk("/desk/requests/token", form({ name: "World Liberty USD", ticker: "USD1", note: "From the WLFI answer" }));
+    expect(res.status).toBe(303);
+    const row = await db.prepare("SELECT type, text, status FROM requests WHERE type = 'scholar-token'").first<Record<string, string>>();
+    expect(row).toEqual({ type: "scholar-token", text: "World Liberty USD (USD1): From the WLFI answer", status: "open" });
+    expect((await desk("/desk/requests/token", form({ name: "", ticker: "" }))).status).toBe(422);
+  });
+
+  it("freezing the next wave takes the top N of the latest ranking", async () => {
+    await db.batch([
+      db.prepare("INSERT INTO market_snapshots (taken_at, cmc_id, symbol, name, rank) VALUES ('2026-12-30T03:17:00Z', 'a', 'AAA', 'A', 1)"),
+      db.prepare("INSERT INTO market_snapshots (taken_at, cmc_id, symbol, name, rank) VALUES ('2026-12-30T03:17:00Z', 'b', 'BBB', 'B', 2)"),
+      db.prepare("INSERT INTO market_snapshots (taken_at, cmc_id, symbol, name, rank) VALUES ('2026-12-30T03:17:00Z', 'c', 'CCC', 'C', 3)"),
+    ]);
+    expect((await desk("/desk/waves", form({ size: "2" }))).status).toBe(303);
+    const w = await db.prepare("SELECT id, size, snapshot_at FROM waves ORDER BY id DESC LIMIT 1").first<Record<string, unknown>>();
+    expect(w).toEqual({ id: 2, size: 2, snapshot_at: "2026-12-30T03:17:00Z" });
+    const items = await db.prepare("SELECT symbol FROM wave_items WHERE wave = 2 ORDER BY rank").all<{ symbol: string }>();
+    expect(items.results.map((r) => r.symbol)).toEqual(["AAA", "BBB"]);
+    expect((await desk("/desk/waves", form({ size: "0" }))).status).toBe(422);
+  });
+
   it("lists questions, rule proposals and the library", async () => {
     for (const p of ["/desk/questions", "/desk/rules", "/desk/library"]) expect((await desk(p)).status).toBe(200);
   });
