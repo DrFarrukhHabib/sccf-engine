@@ -11,9 +11,12 @@ const auth = { Authorization: "Bearer test-analyst-key", "Content-Type": "applic
 const call = (path: string, init: RequestInit = {}) => app.request(path, { ...init, headers: { ...auth, ...(init.headers ?? {}) } }, env);
 const post = (path: string, body: unknown) => call(path, { method: "POST", body: JSON.stringify(body) });
 
+const ZERO_OK = { "ZERO-1": "yes", "ZERO-2": "no", "ZERO-3": "no", "ZERO-4": "no" } as const;
+const ZERO_WRAP = { "ZERO-1": "yes", "ZERO-2": "yes", "ZERO-3": "no", "ZERO-4": "no" } as const;
+
 const usdcDraft = {
   assetId: "SCCF-0104", section: "FIAT", confidence: "High",
-  answers: { "FIAT-1": "no", "FIAT-2": "no", "FIAT-3": "no", "FIAT-3B": "no", "FIAT-4": "no" },
+  answers: { ...ZERO_OK, "FIAT-1": "no", "FIAT-2": "no", "FIAT-3": "no", "FIAT-3B": "no", "FIAT-4": "no" },
   evidence: { "FIAT-1": { evidence: "Circle keeps reserve income", sourceUrl: "https://www.circle.com/transparency" } },
   rewards: [{ section: "REWARD", answers: { "REWARD-1": "no", "REWARD-2": "yes", "REWARD-3": "no" } }],
   publicFields: { what: "a dollar stablecoin backed by reserves", why: "It pays its holders nothing.", how: "Exchange it on the spot.", know: "No concerns found." },
@@ -55,7 +58,7 @@ describe("analyst door", () => {
   });
 
   it("refuses a draft that routes to another table", async () => {
-    const res = await post("/analyst/drafts", { ...usdcDraft, answers: { "FIAT-1": "no", "FIAT-2": "yes" } });
+    const res = await post("/analyst/drafts", { ...usdcDraft, answers: { ...ZERO_OK, "FIAT-1": "no", "FIAT-2": "yes" } });
     expect(res.status).toBe(422);
     expect(((await res.json()) as any).error).toMatch(/CRYPTO/);
   });
@@ -75,6 +78,32 @@ describe("analyst door", () => {
     expect(res.status).toBe(201);
     const q = await db.prepare("SELECT question, options_json FROM questions WHERE asset_id = 'SCCF-0200'").first();
     expect(q).toEqual({ question: "Is DOGE still mainly speculative?", options_json: '["Yes","No"]' });
+  });
+
+  it("refuses a draft without the ZERO answers", async () => {
+    const { "ZERO-3": _drop, ...partial } = usdcDraft.answers;
+    const res = await post("/analyst/drafts", { ...usdcDraft, answers: partial });
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as any).error).toMatch(/ZERO-3/);
+  });
+
+  it("a pure-hype token stops at ZERO-3: Haram R7, whatever its class table says", async () => {
+    const res = await post("/analyst/drafts", { ...usdcDraft, answers: { ...usdcDraft.answers, "ZERO-3": "yes" } });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect([body.status, body.code, body.decidingCheckId]).toEqual(["Haram", "R7", "ZERO-3"]);
+  });
+
+  it("an unidentified token stops at ZERO-1: Doubtful D1", async () => {
+    const res = await post("/analyst/drafts", { ...usdcDraft, answers: { ...usdcDraft.answers, "ZERO-1": "not_found" } });
+    const body = (await res.json()) as any;
+    expect([body.status, body.code, body.decidingCheckId]).toEqual(["Doubtful", "D1", "ZERO-1"]);
+  });
+
+  it("a bridged copy must be submitted through WRAP", async () => {
+    const res = await post("/analyst/drafts", { ...usdcDraft, answers: { ...usdcDraft.answers, "ZERO-2": "yes" } });
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as any).error).toMatch(/WRAP/);
   });
 
   it("serves the live catalog so the analyst can read each section's checks", async () => {
@@ -163,7 +192,7 @@ describe("wrapped tokens take the underlying's ruling", () => {
   });
   const wbtc = {
     assetId: "SCCF-0113", section: "WRAP", confidence: "Medium", underlyingAssetId: "SCCF-0013",
-    answers: { "WRAP-1": "no", "WRAP-2": "no", "WRAP-3": "no", "WRAP-4": "no", "WRAP-OUT": "no" },
+    answers: { ...ZERO_WRAP, "WRAP-1": "no", "WRAP-2": "no", "WRAP-3": "no", "WRAP-4": "no", "WRAP-OUT": "no" },
     publicFields: { what: "a version of bitcoin on Ethereum, backed one-for-one" },
   };
 

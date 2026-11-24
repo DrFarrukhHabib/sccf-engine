@@ -22,7 +22,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 
 1. **Identity.** Confirm the token: name, ticker, an official or recognised source, chains and contracts.
 2. **Class.** Pick the catalog section for what the token gives its holder (FIAT, CRYPTO, GOLD, NATIVE, WRAP, LST, EXCH, RWA, LAUNCH, DM, UTIL, GAME, FAN, SOCIAL, NFT, DEBT, INS, INDEX, MEME, STOCK). Wrapped or bridged copies start at ZERO-2 and are ruled through WRAP.
-3. **Answer every check** from `GET /catalog?section=ZERO,<KEY>` in that section's order with `yes`, `no` or `not_found`. Never guess: a fact you could not find is `not_found`. Fraud checks (OUT, FIAT-4) count only proven findings by regulators or courts.
+3. **Answer every check** from `GET /catalog?section=ZERO,<KEY>`: ZERO-1 to ZERO-4 first, then the class section in its order. Put the ZERO answers in the same `answers` object; the engine refuses a draft without them, and ZERO alone can decide the outcome (Doubtful D1, Haram R7) or send it to WRAP. Answer with `yes`, `no` or `not_found`. Never guess: a fact you could not find is `not_found`. Fraud checks (OUT, FIAT-4) count only proven findings by regulators or courts.
 4. **Evidence.** For each answer that matters, give `{evidence, sourceUrl, accessedAt}`. Primary sources first.
 5. **Rewards.** If the token has reward programmes, answer the REWARD (stablecoins) or AIR (airdrops) table in `rewards`.
 6. **Codes.** Where a check's outcome is "coded by that business" (NATIVE-1, LST-4, EXCH-1, INDEX-2/3/4, AIR), give the code in `codes`; otherwise the engine sends it to the Scholar without one.
