@@ -5,7 +5,7 @@ import type { Answer } from "../db/types";
 import { approve, Refused, returnWithNote } from "../review/approve";
 import { compare } from "../review/compare";
 import type { Bindings } from "../index";
-import { CardPage, KeysPage, LibraryPage, ListPage, QuestionsPage, QueuePage, RulingPage } from "../views/pages";
+import { CardPage, KeysPage, LibraryPage, QuestionsPage, QueuePage, RulesPage, RulingPage } from "../views/pages";
 
 export interface DeskOptions {
   config?: (env: Bindings) => AccessConfig;
@@ -139,9 +139,15 @@ export function createDesk(opts: DeskOptions = {}) {
   }, "/desk/questions"));
 
   desk.get("/rules", async (c) => {
-    const { results } = await c.env.DB.prepare("SELECT id, title, where_text, proposed, decision, applied FROM rule_proposals").all();
-    return c.html(<ListPage title="Rule proposals" active="/desk/rules" cols={["id", "title", "where_text", "proposed", "decision", "applied"]} rows={results} />);
+    const { results } = await c.env.DB.prepare("SELECT * FROM rule_proposals ORDER BY decision IS NOT NULL, id").all();
+    return c.html(<RulesPage rows={results} />);
   });
+
+  desk.post("/rules/:id/decide", act(async (db, id, f) => {
+    if (f.decision !== "approved" && f.decision !== "rejected") throw new Refused("Choose Approve or Reject");
+    await db.prepare("UPDATE rule_proposals SET decision = ?, note = ? WHERE id = ? AND decision IS NULL")
+      .bind(f.decision, f.note?.trim() || null, id).run();
+  }, "/desk/rules"));
 
   desk.get("/library", async (c) => {
     const { results } = await c.env.DB.prepare(

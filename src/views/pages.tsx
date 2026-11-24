@@ -203,6 +203,34 @@ export const LibraryPage = ({ rows }: { rows: Row[] }) => {
   );
 };
 
+export const RulesPage = ({ rows }: { rows: Row[] }) => (
+  <Layout title="Rule proposals" active="/desk/rules">
+    <p class="muted">Changes to the Decision Tables. Once you approve one, Claude applies the exact proposed wording and re-checks the tokens it affects.</p>
+    {rows.length === 0 && <p>Nothing here.</p>}
+    {rows.map((r) => (
+      <div class="card">
+        <h3>{r.title}</h3>
+        {r.where_text && <p class="muted">{r.where_text}</p>}
+        {r.current && <p><b>Now:</b> {r.current}</p>}
+        {r.proposed && <p><b>Proposed:</b> {r.proposed}</p>}
+        {r.reason && <p><b>Why:</b> {r.reason}</p>}
+        {r.affects && <p><b>Tokens affected:</b> {r.affects}</p>}
+        {r.decision ? (
+          <p><b>Your decision:</b> {r.decision}{r.note ? ` (${r.note})` : ""} · {r.applied ? "Applied" : "Not yet applied"}</p>
+        ) : (
+          <form method="post" action={`/desk/rules/${r.id}/decide`}>
+            <textarea name="note" rows={2} placeholder="Note (optional)"></textarea>
+            <p>
+              <button name="decision" value="approved">Approve</button>{" "}
+              <button class="ghost" name="decision" value="rejected">Reject</button>
+            </p>
+          </form>
+        )}
+      </div>
+    ))}
+  </Layout>
+);
+
 export const ListPage = ({ title, cols, rows, active }: { title: string; cols: string[]; rows: Row[]; active?: string }) => (
   <Layout title={title} active={active}>
     <table>
