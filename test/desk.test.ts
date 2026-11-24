@@ -223,6 +223,15 @@ describe("desk pages", () => {
     expect((await desk("/desk/rules/rp-1/decide", form({ decision: "maybe" }))).status).toBe(422);
   });
 
+  it("each offered option is a clickable button that fills the answer box, plus an Other choice", async () => {
+    await db.prepare("INSERT OR IGNORE INTO questions (id, asset_id, question, options_json) VALUES ('Q-chips', 'SCCF-0104', 'Pick one', '[\"Halal H2 (row 5)\",\"Haram R2\"]')").run();
+    const page = await (await desk("/desk/questions")).text();
+    expect(page).toContain('data-fill="Halal H2 (row 5)"');
+    expect(page).toContain('data-fill="Haram R2"');
+    expect(page).toContain('data-other');
+    expect(page).toMatch(/<script>[^<]*data-fill/);
+  });
+
   it("lists questions, rule proposals and the library", async () => {
     for (const p of ["/desk/questions", "/desk/rules", "/desk/library"]) expect((await desk(p)).status).toBe(200);
   });
