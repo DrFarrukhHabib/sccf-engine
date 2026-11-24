@@ -211,6 +211,18 @@ describe("desk pages", () => {
     }
   });
 
+  it("a rule proposal can be approved or rejected from the desk, once", async () => {
+    await db.prepare("INSERT OR IGNORE INTO rule_proposals (id, title, proposed) VALUES ('rp-1', 'Test rule', 'New wording')").run();
+    expect(await (await desk("/desk/rules")).text()).toContain('action="/desk/rules/rp-1/decide"');
+    const res = await desk("/desk/rules/rp-1/decide", form({ decision: "approved", note: "Agreed" }));
+    expect(res.status).toBe(303);
+    const row = await db.prepare("SELECT decision, note FROM rule_proposals WHERE id = 'rp-1'").first<{ decision: string; note: string }>();
+    expect(row).toEqual({ decision: "approved", note: "Agreed" });
+    expect((await desk("/desk/rules/rp-1/decide", form({ decision: "rejected" }))).status).toBe(303);
+    expect((await db.prepare("SELECT decision FROM rule_proposals WHERE id = 'rp-1'").first<{ decision: string }>())?.decision).toBe("approved");
+    expect((await desk("/desk/rules/rp-1/decide", form({ decision: "maybe" }))).status).toBe(422);
+  });
+
   it("lists questions, rule proposals and the library", async () => {
     for (const p of ["/desk/questions", "/desk/rules", "/desk/library"]) expect((await desk(p)).status).toBe(200);
   });
