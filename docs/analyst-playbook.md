@@ -67,7 +67,7 @@ Carried over from the old worker playbook at the 24 November 2026 switch-over. T
 - **Staking:**
   - If depositors' assets are lent at interest, the token is R1 whatever the interest's share (autoETH precedent). This includes when the interest reaching holders is unconfirmed but the depositors' assets are lent (sfrxETH, decided 13 November 2026).
   - Restaking pay from a haram service is haram.
-- **Native coins** such as BTC and ETH are non-monetary digital assets, not money. A foundation's marketing of interest-based products does not by itself make a neutral chain's coin Doubtful when the coin's value is not shown to depend on them (answer of 15 November 2026 on Algorand, Avalanche and Cosmos; a rule proposal to write this into native coins row 2 awaits the Scholar).
+- **Native coins** such as BTC and ETH are non-monetary digital assets, not money. A foundation's marketing of interest-based products does not by itself make a neutral chain's coin Doubtful when the coin's value is not shown to depend on them (answer of 15 November 2026 on Algorand, Avalanche and Cosmos; written into NATIVE-2 when the Scholar approved the rule proposal on 24 November 2026).
 
 ## Public fields: wording rules
 
