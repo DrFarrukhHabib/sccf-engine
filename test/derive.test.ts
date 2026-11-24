@@ -13,6 +13,13 @@ beforeAll(async () => {
 const base = { sendToScholar: false, useConditions: [], rewardRulings: [] };
 
 describe("deriveOutcome", () => {
+  it("AIR: the Otherwise row applies only when no earlier row said yes", () => {
+    const haram = deriveOutcome(catalog, "AIR", { "AIR-1": "no", "AIR-2": "yes", "AIR-3": "no" }).rewardRulings;
+    expect(haram.map((r) => r.checkId)).toEqual(["AIR-2"]);
+    const clean = deriveOutcome(catalog, "AIR", { "AIR-1": "no", "AIR-2": "no", "AIR-3": "no" }).rewardRulings;
+    expect(clean).toEqual([{ checkId: "AIR-4", ruling: "permissible" }]);
+  });
+
   it("FIAT: all no gives Halal H2 via FIAT-6", () => {
     expect(deriveOutcome(catalog, "FIAT", { "FIAT-1": "no", "FIAT-2": "no", "FIAT-3": "no", "FIAT-3B": "no", "FIAT-4": "no" }))
       .toEqual({ ...base, status: "Halal", code: "H2", decidingCheckId: "FIAT-6" });
