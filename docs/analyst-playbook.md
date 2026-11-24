@@ -12,6 +12,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 | --- | --- |
 | `GET /catalog` | The live check questions by section: `{version, sections: {KEY: [{id, type, question, ifYes, ifNotFound, judgment}]}}`. Narrow with `?section=ZERO,FIAT`. Read ZERO and the token's section before answering. |
 | `GET /queue` | `firstReviews` (registered assets with no ruling, highest market cap first by the newest CoinMarketCap snapshot; unranked ones last), `reReviews` (due within 30 days), `unlisted` (top CoinMarketCap assets not yet registered, by rank). Up to 15 each. |
+| `POST /assets` | Register a token from `unlisted` before reviewing it: `{cmcId, coingeckoId, name, ticker, class}`. Returns its new SCCF id. Refused if it is already registered. |
 | `GET /requests` | Open requests from the Scholar (next batch, re-review, card change, new listing). |
 | `POST /drafts` | Submit one review (below). The engine derives the outcome, builds the public card and stores a draft. |
 | `GET /answers` | The Scholar's answers you have not yet acted on: `[{id, assetId, rulingId, question, answer}]`. |
@@ -23,6 +24,10 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 ## Start of every run: the Scholar's answers
 
 Before any new work, `GET /answers`. For each answer, do what it says: usually submit a fresh draft for that token that follows the answer (with `supersedes` set to the earlier draft's ruling id), or log a `Note` event if nothing needs to change. Then `POST /questions/:id/applied`. The Scholar's answer is final for that token; never argue it back.
+
+## Choosing the batch
+
+Each run reviews up to 15 tokens. Take `firstReviews` first (highest market cap first). If there are fewer than 15, fill the batch from `unlisted` in rank order: confirm each token's identity, skip wrapped or bridged copies whose original is already registered, register it with `POST /assets`, then review it. Re-reviews in `reReviews` come after the batch, up to 15 per run.
 
 ## One review
 

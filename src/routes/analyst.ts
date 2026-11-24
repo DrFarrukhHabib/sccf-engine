@@ -190,6 +190,26 @@ analyst.post("/questions", async (c) => {
   return c.json({ id }, 201);
 });
 
+/** Registers a token from the market list (`unlisted`) so it can be reviewed. Takes the next SCCF id. */
+analyst.post("/assets", async (c) => {
+  const db = c.env.DB;
+  const b = await c.req.json<{ cmcId?: string; coingeckoId?: string; name?: string; ticker?: string; class?: string }>();
+  if (!b.name?.trim() || !b.ticker?.trim() || !b.class?.trim()) return c.json(fail("name, ticker and class are required"), 422);
+  const catalog = await loadCatalog(db, "1.0");
+  const cls = b.class.trim().toUpperCase();
+  if (!catalog.sections[cls] || cls === "ZERO") return c.json(fail(`Unknown class ${b.class}`), 422);
+  const dup = await db.prepare(
+    `SELECT id FROM assets WHERE (?1 IS NOT NULL AND cmc_id = ?1) OR (?2 IS NOT NULL AND coingecko_id = ?2)
+       OR (UPPER(ticker) = UPPER(?3) AND UPPER(name) = UPPER(?4))`,
+  ).bind(b.cmcId ? String(b.cmcId) : null, b.coingeckoId ?? null, b.ticker.trim(), b.name.trim()).first<{ id: string }>();
+  if (dup) return c.json(fail(`Already registered as ${dup.id}`), 409);
+  const last = await db.prepare("SELECT MAX(CAST(SUBSTR(id, 6) AS INTEGER)) AS n FROM assets WHERE id LIKE 'SCCF-%'").first<{ n: number | null }>();
+  const id = `SCCF-${String((last?.n ?? 0) + 1).padStart(4, "0")}`;
+  await db.prepare("INSERT INTO assets (id, cmc_id, coingecko_id, name, ticker, class) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(id, b.cmcId ? String(b.cmcId) : null, b.coingeckoId ?? null, b.name.trim(), b.ticker.trim(), cls).run();
+  return c.json({ id }, 201);
+});
+
 /** The Scholar's answers that the analyst has not yet acted on. */
 analyst.get("/answers", async (c) => {
   const { results } = await c.env.DB.prepare(

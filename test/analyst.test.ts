@@ -175,6 +175,17 @@ describe("analyst door", () => {
     const body = (await (await call("/analyst/queue")).json()) as any;
     expect(body.reReviews.map((a: any) => a.id)).toEqual(["SCCF-0300"]);
   });
+  it("registers a new asset from the market list with the next SCCF id", async () => {
+    const res = await post("/analyst/assets", { cmcId: "52", name: "XRP", ticker: "XRP", class: "NATIVE", coingeckoId: "ripple" });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.id).toMatch(/^SCCF-\d{4}$/);
+    const max = await db.prepare("SELECT MAX(id) AS m FROM assets WHERE id != ?").bind(body.id).first<{ m: string }>();
+    expect(Number(body.id.slice(5))).toBe(Number(max!.m.slice(5)) + 1);
+    expect((await post("/analyst/assets", { cmcId: "52", name: "XRP", ticker: "XRP", class: "NATIVE" })).status).toBe(409);
+    expect((await post("/analyst/assets", { name: "No class", ticker: "NC" })).status).toBe(422);
+    expect((await post("/analyst/assets", { name: "Bad", ticker: "BAD", class: "NOPE" })).status).toBe(422);
+  });
 });
 
 describe("CoinMarketCap client", () => {
