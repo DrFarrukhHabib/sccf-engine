@@ -105,9 +105,15 @@ analyst.post("/drafts", async (c) => {
     if (!prev || prev.asset_id !== b.assetId) return c.json(fail(`supersedes must name an earlier ruling of ${b.assetId}`), 422);
   }
   const catalog = await loadCatalog(db, "1.0");
+  // Every draft passes the ZERO gate first ("Is it an asset?"): it can stop the review or send it to WRAP.
+  const zeroIds = (catalog.sections.ZERO ?? []).filter((c) => !c.question.startsWith("Otherwise")).map((c) => c.id);
+  const missing = zeroIds.filter((id) => !(id in (b.answers ?? {})));
+  if (missing.length) return c.json(fail(`Answer the ZERO checks first: ${missing.join(", ")}`), 422);
   let outcome;
   try {
-    outcome = deriveOutcome(catalog, b.section, b.answers, b.codes);
+    const zero = deriveOutcome(catalog, "ZERO", Object.fromEntries(zeroIds.map((id) => [id, b.answers[id]])));
+    if (zero.route === "WRAP" && b.section !== "WRAP") return c.json(fail("ZERO-2 says this is a bridged or wrapped copy: submit it through WRAP"), 422);
+    outcome = zero.status ? zero : deriveOutcome(catalog, b.section, b.answers, b.codes);
     for (const r of b.rewards ?? []) outcome.rewardRulings.push(...deriveOutcome(catalog, r.section, r.answers).rewardRulings);
   } catch (e) {
     return c.json(fail((e as Error).message), 422);
