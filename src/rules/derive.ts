@@ -81,6 +81,8 @@ export function deriveOutcome(
     if (isUseCondition(c)) {
       if (answer === "yes") out.useConditions.push(c.id);
     } else if (isReward(c)) {
+      // A reward table's Otherwise row means "none of the rows above": skip it once an earlier row matched.
+      if (c.question.startsWith("Otherwise") && out.rewardRulings.some((r) => r.ruling !== "avoid")) continue;
       if (answer === "yes") out.rewardRulings.push({ checkId: c.id, ruling: rewardRuling(c.ifYes ?? "") });
       else if (answer === "not_found" && c.ifNotFound && /avoid/i.test(c.ifNotFound)) out.rewardRulings.push({ checkId: c.id, ruling: "avoid" });
     }
