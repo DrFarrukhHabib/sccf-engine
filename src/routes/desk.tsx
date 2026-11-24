@@ -5,7 +5,7 @@ import type { Answer } from "../db/types";
 import { approve, Refused, returnWithNote } from "../review/approve";
 import { compare } from "../review/compare";
 import type { Bindings } from "../index";
-import { CardPage, KeysPage, ListPage, QuestionsPage, QueuePage, RulingPage } from "../views/pages";
+import { CardPage, KeysPage, LibraryPage, ListPage, QuestionsPage, QueuePage, RulingPage } from "../views/pages";
 
 export interface DeskOptions {
   config?: (env: Bindings) => AccessConfig;
@@ -18,6 +18,11 @@ const envConfig = (env: Bindings): AccessConfig => ({
 
 const OPEN = `NOT EXISTS (SELECT 1 FROM signatures s WHERE s.ruling_id = r.id AND s.role IN ('approved','standing'))
   AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ruling_id = r.id AND e.type = 'Return')`;
+const UNANSWERED = `(SELECT COUNT(*) FROM questions q WHERE q.answer IS NULL AND (q.asset_id = r.asset_id OR q.ruling_id = r.id))`;
+/** Drafts the Scholar may approve in one click: same status as the old system, High confidence, no open question. */
+const MATCHING = `${OPEN} AND r.confidence = 'High' AND a.old_status = r.status AND ${UNANSWERED} = 0`;
+const OPEN_QUESTIONS = `SELECT q.id, q.asset_id, a.name AS asset_name, q.question, q.context, q.options_json AS options
+  FROM questions q LEFT JOIN assets a ON a.id = q.asset_id WHERE q.answer IS NULL`;
 
 export function createDesk(opts: DeskOptions = {}) {
   const desk = new Hono<{ Bindings: Bindings; Variables: { scholar: string } }>();
@@ -36,20 +41,39 @@ export function createDesk(opts: DeskOptions = {}) {
   desk.get("/queue", async (c) => {
     const db = c.env.DB;
     const drafts = await db.prepare(
-      `SELECT r.*, a.name, a.ticker FROM rulings r JOIN assets a ON a.id = r.asset_id WHERE ${OPEN} ORDER BY r.send_to_scholar DESC, r.created_at`,
-    ).all();
+      `SELECT r.*, a.name, a.ticker, a.old_status, a.old_code, ${UNANSWERED} AS open_questions
+       FROM rulings r JOIN assets a ON a.id = r.asset_id WHERE ${OPEN} ORDER BY r.send_to_scholar DESC, r.created_at`,
+    ).all<Record<string, any>>();
     const returned = await db.prepare(
       `SELECT r.id, a.name, a.ticker, e.detail FROM rulings r JOIN assets a ON a.id = r.asset_id
        JOIN events e ON e.ruling_id = r.id AND e.type = 'Return'
        WHERE NOT EXISTS (SELECT 1 FROM rulings n WHERE n.supersedes = r.id) ORDER BY e.at`,
     ).all();
-    return c.html(<QueuePage drafts={drafts.results} returned={returned.results} />);
+    const questions = await db.prepare(`${OPEN_QUESTIONS} ORDER BY q.created_at`).all();
+    const eligible = await db.prepare(`SELECT COUNT(*) AS n FROM rulings r JOIN assets a ON a.id = r.asset_id WHERE ${MATCHING}`).first<{ n: number }>();
+    const approved = await db.prepare(
+      `SELECT COUNT(DISTINCT r.asset_id) AS n FROM rulings r JOIN signatures s ON s.ruling_id = r.id AND s.role IN ('approved','standing')
+       WHERE NOT EXISTS (SELECT 1 FROM events e WHERE e.ruling_id = r.id AND e.type = 'Return')`,
+    ).first<{ n: number }>();
+    return c.html(<QueuePage drafts={drafts.results} returned={returned.results} questions={questions.results}
+      approved={approved?.n ?? 0} eligible={eligible?.n ?? 0} />);
+  });
+
+  desk.post("/approve-matching", async (c) => {
+    const db = c.env.DB;
+    const { results } = await db.prepare(`SELECT r.id FROM rulings r JOIN assets a ON a.id = r.asset_id WHERE ${MATCHING}`).all<{ id: string }>();
+    for (const { id } of results) await approve(db, id, c.get("scholar"));
+    return c.redirect("/desk/queue", 303);
   });
 
   const load = async (db: D1Database, id: string) =>
-    db.prepare("SELECT r.*, a.name, a.ticker FROM rulings r JOIN assets a ON a.id = r.asset_id WHERE r.id = ?").bind(id).first<Record<string, any>>();
+    db.prepare("SELECT r.*, a.name, a.ticker, a.old_status, a.old_code, a.earlier_status FROM rulings r JOIN assets a ON a.id = r.asset_id WHERE r.id = ?").bind(id).first<Record<string, any>>();
   const checksOf = async (db: D1Database, id: string) =>
-    (await db.prepare("SELECT * FROM ruling_checks WHERE ruling_id = ? ORDER BY check_id").bind(id).all<Record<string, any>>()).results;
+    (await db.prepare(
+      `SELECT rc.*, cc.question FROM ruling_checks rc
+       LEFT JOIN catalog_checks cc ON cc.id = rc.check_id AND cc.version = (SELECT criteria_version FROM rulings WHERE id = rc.ruling_id)
+       WHERE rc.ruling_id = ? ORDER BY rc.check_id`,
+    ).bind(id).all<Record<string, any>>()).results;
 
   desk.get("/rulings/:id", async (c) => {
     const db = c.env.DB;
@@ -71,7 +95,12 @@ export function createDesk(opts: DeskOptions = {}) {
       }
     }
     const open = !!(await db.prepare(`SELECT 1 FROM rulings r WHERE r.id = ? AND ${OPEN}`).bind(r.id).first());
-    return c.html(<RulingPage r={r} checks={checks} changes={changes} previous={previous} isOpen={open} />);
+    const questions = (await db.prepare(`${OPEN_QUESTIONS} AND (q.asset_id = ? OR q.ruling_id = ?) ORDER BY q.created_at`)
+      .bind(r.asset_id, r.id).all<Record<string, any>>()).results;
+    const deciding = await db.prepare("SELECT question FROM catalog_checks WHERE id = ? AND version = ?")
+      .bind(r.deciding_check, r.criteria_version).first<{ question: string }>();
+    return c.html(<RulingPage r={r} checks={checks} changes={changes} previous={previous} isOpen={open}
+      questions={questions} decidingText={deciding?.question ?? null} />);
   });
 
   desk.get("/rulings/:id/card", async (c) => {
@@ -90,7 +119,8 @@ export function createDesk(opts: DeskOptions = {}) {
       if (e instanceof Refused) return c.text((e as Error).message, 422);
       throw e;
     }
-    return c.redirect(back, 303);
+    const to = typeof form.back === "string" && /^\/desk\/[\w\-\/]*$/.test(form.back) ? form.back : back;
+    return c.redirect(to, 303);
   };
   desk.post("/rulings/:id/approve", act((db, id, _f, by) => approve(db, id, by)));
   desk.post("/rulings/:id/return", act((db, id, f) => returnWithNote(db, id, f.note ?? "")));
@@ -110,7 +140,7 @@ export function createDesk(opts: DeskOptions = {}) {
 
   desk.get("/rules", async (c) => {
     const { results } = await c.env.DB.prepare("SELECT id, title, where_text, proposed, decision, applied FROM rule_proposals").all();
-    return c.html(<ListPage title="Rule proposals" cols={["id", "title", "where_text", "proposed", "decision", "applied"]} rows={results} />);
+    return c.html(<ListPage title="Rule proposals" active="/desk/rules" cols={["id", "title", "where_text", "proposed", "decision", "applied"]} rows={results} />);
   });
 
   desk.get("/library", async (c) => {
@@ -121,7 +151,7 @@ export function createDesk(opts: DeskOptions = {}) {
                          WHERE n.asset_id = a.id AND ns.at > s.at)
        ORDER BY a.id`,
     ).all();
-    return c.html(<ListPage title="Library" cols={["id", "name", "ticker", "class", "status", "code", "approved"]} rows={results} />);
+    return c.html(<LibraryPage rows={results} />);
   });
 
   const clients = async (db: D1Database) =>

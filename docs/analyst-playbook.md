@@ -11,7 +11,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 | Call | Use |
 | --- | --- |
 | `GET /catalog` | The live check questions by section: `{version, sections: {KEY: [{id, type, question, ifYes, ifNotFound, judgment}]}}`. Narrow with `?section=ZERO,FIAT`. Read ZERO and the token's section before answering. |
-| `GET /queue` | `firstReviews` (registered assets with no ruling, in class order: native, exchange/governance, utility, stablecoins, meme, rest), `reReviews` (due within 30 days), `unlisted` (top CoinMarketCap assets not yet registered, by rank). Up to 15 each. |
+| `GET /queue` | `firstReviews` (registered assets with no ruling, highest market cap first by the newest CoinMarketCap snapshot; unranked ones last), `reReviews` (due within 30 days), `unlisted` (top CoinMarketCap assets not yet registered, by rank). Up to 15 each. |
 | `GET /requests` | Open requests from the Scholar (next batch, re-review, card change, new listing). |
 | `POST /drafts` | Submit one review (below). The engine derives the outcome, builds the public card and stores a draft. |
 | `GET /answers` | The Scholar's answers you have not yet acted on: `[{id, assetId, rulingId, question, answer}]`. |
