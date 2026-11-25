@@ -43,18 +43,27 @@ export async function fastLane(db: D1Database, limit = 15) {
 export interface WaveProgress { id: number; size: number; snapshotAt: string; approved: number; drafted: number; toGo: number }
 
 /** How far the newest wave has got: approved, drafted but not approved, and not yet reviewed. */
+/** Counts the newest wave's tokens that are approved, drafted, or still to go. */
+export const WAVE_PROGRESS_SQL = `
+  WITH items AS (SELECT rank, cmc_id, symbol FROM wave_items WHERE wave = ?1),
+  ok AS (SELECT DISTINCT r.asset_id FROM rulings r JOIN signatures s ON s.ruling_id = r.id AND s.role IN ('approved','standing')
+         WHERE NOT EXISTS (SELECT 1 FROM events e WHERE e.ruling_id = r.id AND e.type = 'Return')),
+  ruled AS (SELECT DISTINCT asset_id FROM rulings),
+  linked AS (
+    SELECT i.rank, a.id FROM items i JOIN assets a ON a.cmc_id = i.cmc_id
+    UNION
+    SELECT i.rank, a.id FROM items i JOIN assets a ON a.cmc_id IS NULL AND UPPER(a.ticker) = UPPER(i.symbol)),
+  state AS (
+    SELECT i.rank, MAX(CASE WHEN l.id IN (SELECT asset_id FROM ok) THEN 2 WHEN l.id IN (SELECT asset_id FROM ruled) THEN 1 ELSE 0 END) AS st
+    FROM items i LEFT JOIN linked l ON l.rank = i.rank GROUP BY i.rank)
+  SELECT SUM(st = 2) AS approved, SUM(st = 1) AS drafted, COUNT(*) AS total FROM state`;
+
 export async function waveProgress(db: D1Database): Promise<WaveProgress | null> {
   const wave = await db.prepare("SELECT id, size, snapshot_at FROM waves ORDER BY id DESC LIMIT 1")
     .first<{ id: number; size: number; snapshot_at: string }>();
   if (!wave) return null;
-  const row = await db.prepare(
-    `SELECT
-       SUM(CASE WHEN EXISTS (SELECT 1 FROM assets a WHERE ${MATCHES("w", "a")} AND ${APPROVED("a")}) THEN 1 ELSE 0 END) AS approved,
-       SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM assets a WHERE ${MATCHES("w", "a")} AND ${APPROVED("a")})
-                 AND EXISTS (SELECT 1 FROM assets a WHERE ${MATCHES("w", "a")} AND ${HAS_RULING("a")}) THEN 1 ELSE 0 END) AS drafted,
-       COUNT(*) AS total
-     FROM wave_items w WHERE w.wave = ?`,
-  ).bind(wave.id).first<{ approved: number | null; drafted: number | null; total: number }>();
+  const row = await db.prepare(WAVE_PROGRESS_SQL)
+    .bind(wave.id).first<{ approved: number | null; drafted: number | null; total: number }>();
   const approved = row?.approved ?? 0, drafted = row?.drafted ?? 0, total = row?.total ?? 0;
   return { id: wave.id, size: total, snapshotAt: wave.snapshot_at, approved, drafted, toGo: total - approved - drafted };
 }
