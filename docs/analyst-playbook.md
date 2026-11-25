@@ -11,7 +11,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 | Call | Use |
 | --- | --- |
 | `GET /catalog` | The live check questions by section: `{version, sections: {KEY: [{id, type, question, ifYes, ifNotFound, judgment}]}}`. Narrow with `?section=ZERO,FIAT`. Read ZERO and the token's section before answering. |
-| `GET /queue` | In priority order: `requests` (tokens the Scholar asked for), `fastLane` (tokens in the top 100 on each of the last 7 nightly rankings that are outside the frozen wave and not yet reviewed; `assetId` is set if already registered), `firstReviews` (registered tokens with no ruling, in the frozen wave's rank order; unranked last), `unlisted` (tokens in the frozen wave not yet registered, by rank), `reReviews` (due within 30 days). Up to 15 each. |
+| `GET /queue` | In priority order: `requests` (tokens the Scholar asked for), `fastLane` (tokens in the top 100 on each of the last 7 nightly rankings that are outside the frozen wave and not yet reviewed; `assetId` is set if already registered), `firstReviews` (registered tokens with no ruling, in the frozen wave's rank order; unranked last), `unlisted` (tokens in the frozen wave not yet registered, by rank), `reReviews` (due within 30 days), `backfill` (approved rulings from before 25 November 2026 that lack the full summary or the contract addresses: `{id, rulingId, missing}`). Up to 15 each (backfill up to 10). |
 | `POST /assets` | Register a token from `unlisted` before reviewing it: `{cmcId, coingeckoId, name, ticker, class}`. Returns its new SCCF id. Refused if it is already registered. |
 | `POST /requests/:id/done` | Close a Scholar token request once its token is drafted: `{result}` (one line, e.g. "Registered as SCCF-0170 and drafted"). |
 | `GET /requests` | Open requests from the Scholar (next batch, re-review, card change, new listing). |
@@ -20,6 +20,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 | `POST /questions/:id/applied` | Mark an answer as acted on, once you have done what it says. |
 | `POST /questions` | A question for the Scholar: `{assetId, question, context, options}`. |
 | `POST /events` | Log a `First`, `Re-review`, `Trigger`, `Migration` or `Note` event. |
+| `GET /report?days=7` | The week's work in numbers (drafts, approvals, refusals, questions, wave and backfill progress). Used by the weekly check-in. |
 | `POST /snapshot` | Store a CoinMarketCap rank snapshot (`{listings}` or empty to fetch with the engine's key). |
 
 ## Start of every run: the Scholar's answers
@@ -36,6 +37,8 @@ Each run reviews up to 15 tokens, taken from `GET /queue` in this order until th
 4. **`unlisted`**: the frozen wave's unregistered tokens, by rank. Confirm identity, skip wrapped or bridged copies whose original is already registered, register with `POST /assets` (always give `cmcId`), then review.
 
 Re-reviews in `reReviews` come after the batch, up to 15 per run. The wave is frozen by the Scholar; never re-rank it yourself.
+
+**Backfill** (until the list is empty, expected in mid-December 2026): after the batch and the re-reviews, take up to 10 tokens from `backfill`. Each is a full re-review under the research standard, submitted with `supersedes` = its `rulingId`, and must include the full public fields and `networks`. Apply the Scholar's earlier decision on the token unless the facts have changed; if your answers now give a different status or code, say why in the evidence, and the Scholar decides. A refused draft is logged on the token and appears in the weekly report.
 
 ## One review
 

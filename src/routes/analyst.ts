@@ -6,9 +6,12 @@ import { buildPublic } from "../public/build";
 import { assertPublicSafe } from "../public/guard";
 import { deriveOutcome } from "../rules/derive";
 import type { Bindings } from "../index";
-import { fastLane, MATCHES, RANKS } from "../waves";
+import { backfillCount, backfillList } from "../backfill";
+import { fastLane, MATCHES, RANKS, waveProgress } from "../waves";
 
 const BATCH = 15;
+/** Older approved rulings re-reviewed per run to complete the standard record. */
+const BACKFILL = 10;
 /** Analysts may log these; approvals and returns come only from the review desk. */
 const ANALYST_EVENTS = ["First", "Re-review", "Trigger", "Migration", "Note"];
 
@@ -29,6 +32,19 @@ analyst.use("*", async (c, next) => {
   const given = c.req.header("Authorization")?.replace(/^Bearer /, "") ?? "";
   if (!c.env.ANALYST_KEY || !(await sameKey(given, c.env.ANALYST_KEY))) return c.json(fail("Unauthorized"), 401);
   await next();
+});
+
+/** A refused draft is logged on its token, so the weekly report shows what the analyst got wrong. */
+analyst.use("/drafts", async (c, next) => {
+  await next();
+  if (c.req.method !== "POST" || c.res.status !== 422) return;
+  try {
+    const b = await c.req.json<{ assetId?: string }>();
+    const { error } = (await c.res.clone().json()) as { error?: string };
+    const asset = b.assetId && (await c.env.DB.prepare("SELECT id FROM assets WHERE id = ?").bind(b.assetId).first());
+    if (asset) await c.env.DB.prepare("INSERT INTO events (asset_id, type, at, detail) VALUES (?, 'Refused', ?, ?)")
+      .bind(b.assetId, new Date().toISOString(), error ?? "refused").run();
+  } catch { /* logging never blocks the answer */ }
 });
 
 /** The live check questions, so the analyst answers exactly what the engine derives from. `?section=ZERO,FIAT` narrows it. */
@@ -67,7 +83,45 @@ analyst.get("/queue", async (c) => {
        ORDER BY k.rank LIMIT ?`,
     )
     .bind(BATCH).all();
-  return c.json({ requests: requests.results, fastLane: lane, firstReviews: firstReviews.results, reReviews: reReviews.results, unlisted: unlisted.results });
+  const backfill = await backfillList(db, BACKFILL);
+  return c.json({ requests: requests.results, fastLane: lane, firstReviews: firstReviews.results, reReviews: reReviews.results, unlisted: unlisted.results, backfill });
+});
+
+/** The week's work in numbers, for the weekly check-in: drafts, approvals, refusals, questions, wave and backfill progress. */
+analyst.get("/report", async (c) => {
+  const db = c.env.DB;
+  const days = Math.min(31, Math.max(1, Math.floor(Number(c.req.query("days")) || 7)));
+  const since = new Date(Date.now() - days * 864e5).toISOString();
+  const count = async (sql: string) => (await db.prepare(sql).bind(since).first<{ n: number }>())?.n ?? 0;
+  const SIGNED = "EXISTS (SELECT 1 FROM signatures s WHERE s.ruling_id = e.ruling_id AND s.role IN ('approved','standing'))";
+  const refusals = (await db.prepare("SELECT asset_id AS assetId, at, detail FROM events WHERE type = 'Refused' AND at >= ? ORDER BY at DESC LIMIT 20")
+    .bind(since).all()).results;
+  const recentDrafts = (await db.prepare(
+    `SELECT r.id AS rulingId, r.asset_id AS assetId, a.name, r.status, r.code, r.confidence, r.created_at AS createdAt,
+       CASE WHEN EXISTS (SELECT 1 FROM signatures s WHERE s.ruling_id = r.id AND s.role = 'approved') THEN 'approved'
+            WHEN EXISTS (SELECT 1 FROM signatures s WHERE s.ruling_id = r.id AND s.role = 'standing') THEN 'standing'
+            WHEN EXISTS (SELECT 1 FROM events e WHERE e.ruling_id = r.id AND e.type = 'Return') THEN 'returned'
+            WHEN EXISTS (SELECT 1 FROM rulings n WHERE n.supersedes = r.id) THEN 'replaced' ELSE 'waiting' END AS state,
+       (SELECT COUNT(DISTINCT k.source_url) FROM ruling_checks k WHERE k.ruling_id = r.id AND k.source_url LIKE 'https://%') AS webSources,
+       p.what, p.why, p.how
+     FROM rulings r JOIN assets a ON a.id = r.asset_id LEFT JOIN public_fields p ON p.ruling_id = r.id
+     WHERE r.created_at >= ? ORDER BY r.created_at DESC LIMIT 25`,
+  ).bind(since).all()).results;
+  return c.json({
+    days, since, until: new Date().toISOString(),
+    drafts: await count("SELECT COUNT(*) AS n FROM rulings WHERE created_at >= ?"),
+    approved: await count("SELECT COUNT(*) AS n FROM signatures WHERE role = 'approved' AND at >= ?"),
+    standing: await count("SELECT COUNT(*) AS n FROM signatures WHERE role = 'standing' AND at >= ?"),
+    returned: await count(`SELECT COUNT(*) AS n FROM events e WHERE e.type = 'Return' AND e.at >= ? AND NOT ${SIGNED}`),
+    withdrawn: await count(`SELECT COUNT(*) AS n FROM events e WHERE e.type = 'Return' AND e.at >= ? AND ${SIGNED}`),
+    refused: await count("SELECT COUNT(*) AS n FROM events WHERE type = 'Refused' AND at >= ?"),
+    questionsAsked: await count("SELECT COUNT(*) AS n FROM questions WHERE created_at >= ?"),
+    questionsAnswered: await count("SELECT COUNT(*) AS n FROM questions WHERE answered_at >= ?"),
+    openQuestions: (await db.prepare("SELECT COUNT(*) AS n FROM questions WHERE answer IS NULL").first<{ n: number }>())?.n ?? 0,
+    wave: await waveProgress(db),
+    backfillRemaining: await backfillCount(db),
+    refusals, recentDrafts,
+  });
 });
 
 interface DraftBody {
