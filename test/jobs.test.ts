@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { dueReReviews, exportAll, queueNewListings, restoreExport, runDaily, syncRegister } from "../src/jobs/daily";
+import { dueReReviews, exportAll, recordSnapshot, restoreExport, runDaily, syncRegister } from "../src/jobs/daily";
 
 const db = env.DB;
 const listings = [
@@ -30,11 +30,18 @@ describe("daily jobs", () => {
     expect(results).toEqual([{ asset_id: "A-due", type: "re-review" }]);
   });
 
-  it("queues a new CoinMarketCap listing once, not twice", async () => {
-    expect(await queueNewListings(db, listings)).toEqual(["NEW"]);
-    expect(await queueNewListings(db, listings)).toEqual([]);
-    const { results } = await db.prepare("SELECT id, type, text FROM requests WHERE type = 'new-listing'").all();
-    expect(results).toEqual([{ id: "listing-9999", type: "new-listing", text: "Newcoin (NEW), CoinMarketCap rank 80" }]);
+  it("records the nightly ranking without filing requests, and names top-100 newcomers outside the current wave", async () => {
+    expect(await recordSnapshot(db, listings)).toEqual([]);
+    await db.batch([
+      db.prepare("INSERT INTO waves (id, frozen_at, size, snapshot_at) VALUES (1, '2026-11-24', 2, '2026-11-24')"),
+      db.prepare("INSERT INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 1, '1', 'BTC', 'Bitcoin')"),
+      db.prepare("INSERT INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 2, '5426', 'SOL', 'Solana')"),
+    ]);
+    expect(await recordSnapshot(db, listings)).toEqual(["NEW"]);
+    const n = await db.prepare("SELECT COUNT(*) AS n FROM requests WHERE type = 'new-listing'").first<{ n: number }>();
+    expect(n?.n).toBe(0);
+    const snaps = await db.prepare("SELECT COUNT(DISTINCT taken_at) AS n FROM market_snapshots").first<{ n: number }>();
+    expect(snaps?.n).toBe(2);
   });
 
   it("syncs approved rulings to the Asset Register through the given writer", async () => {
@@ -62,7 +69,7 @@ describe("daily jobs", () => {
       { DB: db, BACKUPS: env.BACKUPS } as any,
       { listings: async () => listings, writeRegister: async () => {} },
     );
-    expect(report).toMatchObject({ due: 1, newListings: 0, registerRows: 1 });
+    expect(report).toMatchObject({ due: 1, fastLane: 1, registerRows: 1 });
     const obj = await env.BACKUPS.get(report.backupKey);
     expect(obj).not.toBeNull();
     expect(JSON.parse(await obj!.text()).tables.assets).toHaveLength(2);

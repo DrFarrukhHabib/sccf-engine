@@ -5,6 +5,7 @@ import type { Answer } from "../db/types";
 import { approve, Refused, returnWithNote } from "../review/approve";
 import { compare } from "../review/compare";
 import type { Bindings } from "../index";
+import { fastLane, freezeWave, waveProgress } from "../waves";
 import { CardPage, KeysPage, LibraryPage, QuestionsPage, QueuePage, RulesPage, RulingPage } from "../views/pages";
 
 export interface DeskOptions {
@@ -55,8 +56,11 @@ export function createDesk(opts: DeskOptions = {}) {
       `SELECT COUNT(DISTINCT r.asset_id) AS n FROM rulings r JOIN signatures s ON s.ruling_id = r.id AND s.role IN ('approved','standing')
        WHERE NOT EXISTS (SELECT 1 FROM events e WHERE e.ruling_id = r.id AND e.type = 'Return')`,
     ).first<{ n: number }>();
+    const progress = await waveProgress(db);
+    const lane = (await fastLane(db, 50)).length;
+    const asked = await db.prepare("SELECT id, text, at FROM requests WHERE type = 'scholar-token' AND status = 'open' ORDER BY at").all();
     return c.html(<QueuePage drafts={drafts.results} returned={returned.results} questions={questions.results}
-      approved={approved?.n ?? 0} eligible={eligible?.n ?? 0} />);
+      approved={approved?.n ?? 0} eligible={eligible?.n ?? 0} progress={progress} fastLane={lane} asked={asked.results} />);
   });
 
   desk.post("/approve-matching", async (c) => {
@@ -124,6 +128,20 @@ export function createDesk(opts: DeskOptions = {}) {
   };
   desk.post("/rulings/:id/approve", act((db, id, _f, by) => approve(db, id, by)));
   desk.post("/rulings/:id/return", act((db, id, f) => returnWithNote(db, id, f.note ?? "")));
+
+  desk.post("/requests/token", act(async (db, _id, f) => {
+    const name = f.name?.trim(), ticker = f.ticker?.trim().toUpperCase();
+    if (!name || !ticker) throw new Refused("Give the token's name and ticker");
+    const note = f.note?.trim();
+    await db.prepare("INSERT INTO requests (id, type, text, at) VALUES (?, 'scholar-token', ?, ?)")
+      .bind(crypto.randomUUID(), `${name} (${ticker})${note ? `: ${note}` : ""}`, new Date().toISOString()).run();
+  }));
+
+  desk.post("/waves", act(async (db, _id, f) => {
+    const size = Number(f.size);
+    if (!Number.isInteger(size) || size < 1 || size > 5000) throw new Refused("Choose a size between 1 and 5000");
+    try { await freezeWave(db, size); } catch (e) { throw new Refused((e as Error).message); }
+  }));
 
   desk.get("/questions", async (c) => {
     const { results } = await c.env.DB.prepare(

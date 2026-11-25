@@ -6,6 +6,7 @@ import { buildPublic } from "../public/build";
 import { assertPublicSafe } from "../public/guard";
 import { deriveOutcome } from "../rules/derive";
 import type { Bindings } from "../index";
+import { fastLane, MATCHES, RANKS } from "../waves";
 
 const BATCH = 15;
 /** Analysts may log these; approvals and returns come only from the review desk. */
@@ -44,14 +45,13 @@ analyst.get("/catalog", async (c) => {
 
 analyst.get("/queue", async (c) => {
   const db = c.env.DB;
-  // Highest market cap first, from the newest CoinMarketCap snapshot (by id, else by ticker); unranked assets last, in register order.
+  // Order: the Scholar's token requests, the fast lane, then the frozen wave by rank (registered tokens first, then new ones).
+  const requests = await db.prepare("SELECT id, text, at FROM requests WHERE type = 'scholar-token' AND status = 'open' ORDER BY at").all();
+  const lane = await fastLane(db, BATCH);
   const firstReviews = await db
     .prepare(
-      `SELECT id, name, ticker, class, (
-         SELECT MIN(m.rank) FROM market_snapshots m
-         WHERE m.taken_at = (SELECT MAX(taken_at) FROM market_snapshots)
-           AND (m.cmc_id = assets.cmc_id OR UPPER(m.symbol) = UPPER(assets.ticker))
-       ) AS market_rank
+      `WITH ${RANKS}
+       SELECT id, name, ticker, class, (SELECT MIN(k.rank) FROM ranks k WHERE ${MATCHES("k", "assets")}) AS market_rank
        FROM assets WHERE id NOT IN (SELECT asset_id FROM rulings)
        ORDER BY market_rank IS NULL, market_rank, id LIMIT ?`,
     )
@@ -61,13 +61,13 @@ analyst.get("/queue", async (c) => {
     .bind(BATCH).all();
   const unlisted = await db
     .prepare(
-      `SELECT cmc_id, symbol, name, rank FROM market_snapshots
-       WHERE taken_at = (SELECT MAX(taken_at) FROM market_snapshots)
-         AND cmc_id NOT IN (SELECT cmc_id FROM assets WHERE cmc_id IS NOT NULL)
-       ORDER BY rank LIMIT ?`,
+      `WITH ${RANKS}
+       SELECT k.cmc_id, k.symbol, k.name, k.rank FROM ranks k
+       WHERE NOT EXISTS (SELECT 1 FROM assets a WHERE ${MATCHES("k", "a")})
+       ORDER BY k.rank LIMIT ?`,
     )
     .bind(BATCH).all();
-  return c.json({ firstReviews: firstReviews.results, reReviews: reReviews.results, unlisted: unlisted.results });
+  return c.json({ requests: requests.results, fastLane: lane, firstReviews: firstReviews.results, reReviews: reReviews.results, unlisted: unlisted.results });
 });
 
 interface DraftBody {
@@ -236,6 +236,14 @@ analyst.post("/events", async (c) => {
 analyst.get("/requests", async (c) => {
   const { results } = await c.env.DB.prepare("SELECT * FROM requests WHERE status = 'open' ORDER BY at").all();
   return c.json(results);
+});
+
+analyst.post("/requests/:id/done", async (c) => {
+  const b = await c.req.json<{ result?: string }>().catch(() => ({} as { result?: string }));
+  const r = await c.env.DB.prepare("UPDATE requests SET status = 'done', result = ? WHERE id = ? AND status = 'open'")
+    .bind(b.result?.trim() || null, c.req.param("id")).run();
+  if (!r.meta.changes) return c.json(fail("No open request with that id"), 422);
+  return c.json({ ok: true });
 });
 
 analyst.post("/snapshot", async (c) => {

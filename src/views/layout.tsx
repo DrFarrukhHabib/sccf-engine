@@ -70,6 +70,13 @@ input[type=checkbox]{width:auto}
 .hero{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
 .arrow{font-size:16pt;color:var(--muted)}
 .actions{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.pbar{display:flex;height:16px;border-radius:999px;background:#e5e9f0;overflow:hidden;margin:6px 0 10px}
+.pbar span{display:block;height:100%}
+.b-ok{background:var(--ok)}.b-dr{background:var(--q)}.b-to{background:#cbd5e1}
+.legend{display:flex;gap:22px;flex-wrap:wrap;font-size:11pt}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.forms{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:6px}
+.row2{display:flex;gap:8px}.row2 input[name=ticker],.row2 input[name=size]{max-width:140px}
 .note{background:var(--q-bg);padding:12px 16px;border-radius:10px;border:1px solid #fcd9a0}
 .key{font-family:monospace;font-size:12pt;background:#eef;padding:8px;word-break:break-all}
 .empty{color:var(--muted);font-style:italic;margin:4px 0}

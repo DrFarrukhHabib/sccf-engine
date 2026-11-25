@@ -11,8 +11,9 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 | Call | Use |
 | --- | --- |
 | `GET /catalog` | The live check questions by section: `{version, sections: {KEY: [{id, type, question, ifYes, ifNotFound, judgment}]}}`. Narrow with `?section=ZERO,FIAT`. Read ZERO and the token's section before answering. |
-| `GET /queue` | `firstReviews` (registered assets with no ruling, highest market cap first by the newest CoinMarketCap snapshot; unranked ones last), `reReviews` (due within 30 days), `unlisted` (top CoinMarketCap assets not yet registered, by rank). Up to 15 each. |
+| `GET /queue` | In priority order: `requests` (tokens the Scholar asked for), `fastLane` (tokens now in the top 100 that are outside the frozen wave and not yet reviewed; `assetId` is set if already registered), `firstReviews` (registered tokens with no ruling, in the frozen wave's rank order; unranked last), `unlisted` (tokens in the frozen wave not yet registered, by rank), `reReviews` (due within 30 days). Up to 15 each. |
 | `POST /assets` | Register a token from `unlisted` before reviewing it: `{cmcId, coingeckoId, name, ticker, class}`. Returns its new SCCF id. Refused if it is already registered. |
+| `POST /requests/:id/done` | Close a Scholar token request once its token is drafted: `{result}` (one line, e.g. "Registered as SCCF-0170 and drafted"). |
 | `GET /requests` | Open requests from the Scholar (next batch, re-review, card change, new listing). |
 | `POST /drafts` | Submit one review (below). The engine derives the outcome, builds the public card and stores a draft. |
 | `GET /answers` | The Scholar's answers you have not yet acted on: `[{id, assetId, rulingId, question, answer}]`. |
@@ -27,7 +28,14 @@ Before any new work, `GET /answers`. For each answer, do what it says: usually s
 
 ## Choosing the batch
 
-Each run reviews up to 15 tokens. Take `firstReviews` first (highest market cap first). If there are fewer than 15, fill the batch from `unlisted` in rank order: confirm each token's identity, skip wrapped or bridged copies whose original is already registered, register it with `POST /assets`, then review it. Re-reviews in `reReviews` come after the batch, up to 15 per run.
+Each run reviews up to 15 tokens, taken from `GET /queue` in this order until the batch is full:
+
+1. **`requests`**: tokens the Scholar asked for. Identify the token, register it with `POST /assets` if it is not registered, review it, then `POST /requests/:id/done`.
+2. **`fastLane`**: big newcomers to the top 100. Register any without an `assetId`, then review.
+3. **`firstReviews`**: registered tokens with no ruling, in the frozen wave's order.
+4. **`unlisted`**: the frozen wave's unregistered tokens, by rank. Confirm identity, skip wrapped or bridged copies whose original is already registered, register with `POST /assets` (always give `cmcId`), then review.
+
+Re-reviews in `reReviews` come after the batch, up to 15 per run. The wave is frozen by the Scholar; never re-rank it yourself.
 
 ## One review
 
