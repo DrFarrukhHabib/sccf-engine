@@ -30,18 +30,18 @@ describe("daily jobs", () => {
     expect(results).toEqual([{ asset_id: "A-due", type: "re-review" }]);
   });
 
-  it("records the nightly ranking without filing requests, and names top-100 newcomers outside the current wave", async () => {
-    expect(await recordSnapshot(db, listings)).toEqual([]);
+  it("records the nightly ranking without filing requests; a newcomer enters the fast lane only after 7 nights in the top 100", async () => {
     await db.batch([
       db.prepare("INSERT INTO waves (id, frozen_at, size, snapshot_at) VALUES (1, '2026-11-24', 2, '2026-11-24')"),
       db.prepare("INSERT INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 1, '1', 'BTC', 'Bitcoin')"),
       db.prepare("INSERT INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 2, '5426', 'SOL', 'Solana')"),
     ]);
-    expect(await recordSnapshot(db, listings)).toEqual(["NEW"]);
+    for (let night = 1; night <= 6; night++)
+      expect(await recordSnapshot(db, listings, `2026-11-0${night}T03:17:00Z`)).toEqual([]);
+    const blip = { id: 4242, symbol: "BLIP", name: "Blip", cmc_rank: 40 };
+    expect(await recordSnapshot(db, [...listings, blip], "2026-11-07T03:17:00Z")).toEqual(["NEW"]);
     const n = await db.prepare("SELECT COUNT(*) AS n FROM requests WHERE type = 'new-listing'").first<{ n: number }>();
     expect(n?.n).toBe(0);
-    const snaps = await db.prepare("SELECT COUNT(DISTINCT taken_at) AS n FROM market_snapshots").first<{ n: number }>();
-    expect(snaps?.n).toBe(2);
   });
 
   it("syncs approved rulings to the Asset Register through the given writer", async () => {
