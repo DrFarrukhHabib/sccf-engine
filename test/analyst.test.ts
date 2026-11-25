@@ -195,13 +195,13 @@ describe("analyst door", () => {
       db.prepare("INSERT INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 5, '777', 'NTK', 'Newtoken')"),
       db.prepare("INSERT INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 9, '74', 'DOGE', 'Dogecoin')"),
     ]);
-    await post("/analyst/snapshot", {
-      listings: [
-        { id: 1027, symbol: "ETH", name: "Ethereum", cmc_rank: 2 },
-        { id: 888, symbol: "HOT", name: "Hot Coin", cmc_rank: 50 },
-        { id: 999, symbol: "LATE", name: "Late Coin", cmc_rank: 150 },
-      ],
-    });
+    const nights = [1, 2, 3, 4, 5, 6, 7].map((d) => `2099-01-0${d}T03:17:00Z`);
+    await db.batch(nights.flatMap((at, i) => [
+      db.prepare("INSERT INTO market_snapshots (taken_at, cmc_id, symbol, name, rank) VALUES (?, '1027', 'ETH', 'Ethereum', 2)").bind(at),
+      db.prepare("INSERT INTO market_snapshots (taken_at, cmc_id, symbol, name, rank) VALUES (?, '888', 'HOT', 'Hot Coin', 50)").bind(at),
+      db.prepare("INSERT INTO market_snapshots (taken_at, cmc_id, symbol, name, rank) VALUES (?, '999', 'LATE', 'Late Coin', 150)").bind(at),
+      ...(i === 6 ? [db.prepare("INSERT INTO market_snapshots (taken_at, cmc_id, symbol, name, rank) VALUES (?, '4242', 'BLIP', 'Blip', 40)").bind(at)] : []),
+    ]));
     const q = (await (await call("/analyst/queue")).json()) as any;
     expect(q.firstReviews.slice(0, 2).map((a: any) => a.id)).toEqual(["SCCF-0201", "SCCF-0200"]);
     expect(q.unlisted.map((a: any) => a.symbol)).toEqual(["NTK"]);

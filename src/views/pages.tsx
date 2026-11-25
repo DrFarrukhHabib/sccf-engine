@@ -75,7 +75,7 @@ const WavePanel = ({ progress, fastLane, asked }: { progress: WaveProgress | nul
           <span data-approved={String(progress.approved)}><i class="dot b-ok"></i><b>{progress.approved}</b> approved</span>
           <span data-drafted={String(progress.drafted)}><i class="dot b-dr"></i><b>{progress.drafted}</b> drafted, waiting for you</span>
           <span data-togo={String(progress.toGo)}><i class="dot b-to"></i><b>{progress.toGo}</b> to go</span>
-          <span><b>{fastLane}</b> in the fast lane (new to the top 100)</span>
+          <span><b>{fastLane}</b> in the fast lane (7 nights in the top 100)</span>
         </div>
       </>
     ) : <p class="empty">No wave has been frozen yet.</p>}

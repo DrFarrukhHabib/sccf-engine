@@ -11,7 +11,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 | Call | Use |
 | --- | --- |
 | `GET /catalog` | The live check questions by section: `{version, sections: {KEY: [{id, type, question, ifYes, ifNotFound, judgment}]}}`. Narrow with `?section=ZERO,FIAT`. Read ZERO and the token's section before answering. |
-| `GET /queue` | In priority order: `requests` (tokens the Scholar asked for), `fastLane` (tokens now in the top 100 that are outside the frozen wave and not yet reviewed; `assetId` is set if already registered), `firstReviews` (registered tokens with no ruling, in the frozen wave's rank order; unranked last), `unlisted` (tokens in the frozen wave not yet registered, by rank), `reReviews` (due within 30 days). Up to 15 each. |
+| `GET /queue` | In priority order: `requests` (tokens the Scholar asked for), `fastLane` (tokens in the top 100 on each of the last 7 nightly rankings that are outside the frozen wave and not yet reviewed; `assetId` is set if already registered), `firstReviews` (registered tokens with no ruling, in the frozen wave's rank order; unranked last), `unlisted` (tokens in the frozen wave not yet registered, by rank), `reReviews` (due within 30 days). Up to 15 each. |
 | `POST /assets` | Register a token from `unlisted` before reviewing it: `{cmcId, coingeckoId, name, ticker, class}`. Returns its new SCCF id. Refused if it is already registered. |
 | `POST /requests/:id/done` | Close a Scholar token request once its token is drafted: `{result}` (one line, e.g. "Registered as SCCF-0170 and drafted"). |
 | `GET /requests` | Open requests from the Scholar (next batch, re-review, card change, new listing). |
@@ -31,7 +31,7 @@ Before any new work, `GET /answers`. For each answer, do what it says: usually s
 Each run reviews up to 15 tokens, taken from `GET /queue` in this order until the batch is full:
 
 1. **`requests`**: tokens the Scholar asked for. Identify the token, register it with `POST /assets` if it is not registered, review it, then `POST /requests/:id/done`.
-2. **`fastLane`**: big newcomers to the top 100. Register any without an `assetId`, then review.
+2. **`fastLane`**: big newcomers that have stayed in the top 100 for 7 nights running. Register any without an `assetId`, then review.
 3. **`firstReviews`**: registered tokens with no ruling, in the frozen wave's order.
 4. **`unlisted`**: the frozen wave's unregistered tokens, by rank. Confirm identity, skip wrapped or bridged copies whose original is already registered, register with `POST /assets` (always give `cmcId`), then review.
 

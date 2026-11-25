@@ -17,9 +17,8 @@ export async function dueReReviews(db: D1Database) {
   return results;
 }
 
-/** Records the nightly ranking. Returns the symbols now in the fast lane (top 100, outside the newest wave, not yet reviewed). */
-export async function recordSnapshot(db: D1Database, listings: Listing[]): Promise<string[]> {
-  const at = now();
+/** Records the nightly ranking. Returns the symbols now in the fast lane (top 100 for 7 nights running, outside the newest wave, not yet reviewed). */
+export async function recordSnapshot(db: D1Database, listings: Listing[], at = now()): Promise<string[]> {
   for (let i = 0; i < listings.length; i += 50)
     await db.batch(listings.slice(i, i + 50).map((l) =>
       db.prepare("INSERT INTO market_snapshots (taken_at, cmc_id, symbol, name, rank) VALUES (?, ?, ?, ?, ?)").bind(at, String(l.id), l.symbol, l.name, l.cmc_rank)));
