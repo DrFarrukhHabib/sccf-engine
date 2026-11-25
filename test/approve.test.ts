@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { approve, isPublic, returnWithNote, standingConfirm } from "../src/review/approve";
+import { approve, isPublic, returnWithNote, standingConfirm, withdraw } from "../src/review/approve";
 
 const db = env.DB;
 let n = 0;
@@ -67,6 +67,29 @@ describe("approval", () => {
     const ev = await db.prepare("SELECT type, detail FROM events WHERE ruling_id = ?").bind(id).first();
     expect(ev).toEqual({ type: "Return", detail: "Check the reward terms again" });
     await expect(approve(db, id, "Shariah Scholar")).rejects.toThrow(/returned/);
+  });
+});
+
+describe("next review and withdrawal", () => {
+  it("approving sets the token's next review six months on", async () => {
+    const id = await ruling();
+    await approve(db, id, "Shariah Scholar");
+    const a = await db.prepare("SELECT next_review FROM assets WHERE id = 'SCCF-0104'").first<{ next_review: string }>();
+    const expected = new Date();
+    expected.setUTCMonth(expected.getUTCMonth() + 6);
+    expect(a?.next_review).toBe(expected.toISOString().slice(0, 10));
+  });
+
+  it("a published ruling can be withdrawn with a note; a draft cannot", async () => {
+    const id = await ruling();
+    await approve(db, id, "Shariah Scholar");
+    await expect(withdraw(db, id, "")).rejects.toThrow(/note/);
+    await withdraw(db, id, "New facts on reserves");
+    expect(await isPublic(db, id)).toBe(false);
+    const ev = await db.prepare("SELECT detail FROM events WHERE ruling_id = ? AND type = 'Return'").bind(id).first<{ detail: string }>();
+    expect(ev?.detail).toBe("Withdrawn: New facts on reserves");
+    const draft = await ruling();
+    await expect(withdraw(db, draft, "x")).rejects.toThrow(/not published/);
   });
 });
 

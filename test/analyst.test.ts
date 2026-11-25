@@ -94,6 +94,22 @@ describe("analyst door", () => {
     expect((await rawPost("/analyst/drafts", bad)).status).toBe(422);
   });
 
+  it("standard record: a draft must give what it is, why, and how to use it", async () => {
+    const res = await post("/analyst/drafts", { ...usdcDraft, publicFields: { what: "a dollar stablecoin backed by reserves" } });
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as any).error).toMatch(/why/);
+  });
+
+  it("records the token's networks and contract addresses, once each", async () => {
+    await db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class) VALUES ('SCCF-0211', 'Net Coin', 'NET', 'FIAT')").run();
+    const networks = [{ network: "Ethereum", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" }, { network: "Solana", address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" }];
+    expect((await post("/analyst/drafts", { ...usdcDraft, assetId: "SCCF-0211", networks })).status).toBe(201);
+    expect((await post("/analyst/drafts", { ...usdcDraft, assetId: "SCCF-0211", networks })).status).toBe(201);
+    const rows = await db.prepare("SELECT network, address FROM network_addresses WHERE asset_id = 'SCCF-0211' ORDER BY network").all();
+    expect(rows.results).toEqual(networks);
+    expect((await post("/analyst/drafts", { ...usdcDraft, assetId: "SCCF-0211", networks: [{ network: "", address: "x" }] })).status).toBe(422);
+  });
+
   it("refuses a draft whose public text leaks", async () => {
     const res = await post("/analyst/drafts", { ...usdcDraft, publicFields: { ...usdcDraft.publicFields, why: "It is H2 under SCCF v2." } });
     expect(res.status).toBe(422);
@@ -314,7 +330,7 @@ describe("wrapped tokens take the underlying's ruling", () => {
   const wbtc = {
     assetId: "SCCF-0113", section: "WRAP", confidence: "Medium", underlyingAssetId: "SCCF-0013",
     answers: { ...ZERO_WRAP, "WRAP-1": "no", "WRAP-2": "no", "WRAP-3": "no", "WRAP-4": "no", "WRAP-OUT": "no" },
-    publicFields: { what: "a version of bitcoin on Ethereum, backed one-for-one" },
+    publicFields: { what: "a version of bitcoin on Ethereum, backed one-for-one", why: "It takes the ruling of bitcoin itself.", how: "Hold and use it as you would bitcoin." },
   };
 
   it("WRAP-5 stores the underlying's approved status and code", async () => {

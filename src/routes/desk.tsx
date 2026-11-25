@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { certsProvider, verifyAccess, type AccessConfig, type KeyProvider } from "../auth/access";
 import { hashKey, newKey } from "../auth/keys";
 import type { Answer } from "../db/types";
-import { approve, Refused, returnWithNote } from "../review/approve";
+import { approve, isPublic, Refused, returnWithNote, withdraw } from "../review/approve";
 import { compare } from "../review/compare";
 import type { Bindings } from "../index";
 import { fastLane, freezeWave, waveProgress } from "../waves";
@@ -104,8 +104,9 @@ export function createDesk(opts: DeskOptions = {}) {
       .bind(r.asset_id, r.id).all<Record<string, any>>()).results;
     const deciding = await db.prepare("SELECT question FROM catalog_checks WHERE id = ? AND version = ?")
       .bind(r.deciding_check, r.criteria_version).first<{ question: string }>();
+    const publicText = await db.prepare("SELECT what, why, how, know, usage_line FROM public_fields WHERE ruling_id = ?").bind(r.id).first<Record<string, string | null>>();
     return c.html(<RulingPage r={r} checks={checks} changes={changes} previous={previous} isOpen={open}
-      questions={questions} decidingText={deciding?.question ?? null} />);
+      questions={questions} decidingText={deciding?.question ?? null} publicText={publicText} published={await isPublic(db, r.id)} />);
   });
 
   desk.get("/rulings/:id/card", async (c) => {
@@ -129,6 +130,7 @@ export function createDesk(opts: DeskOptions = {}) {
   };
   desk.post("/rulings/:id/approve", act((db, id, _f, by) => approve(db, id, by)));
   desk.post("/rulings/:id/return", act((db, id, f) => returnWithNote(db, id, f.note ?? "")));
+  desk.post("/rulings/:id/withdraw", act((db, id, f) => withdraw(db, id, f.note ?? "")));
 
   desk.post("/requests/token", act(async (db, _id, f) => {
     const name = f.name?.trim(), ticker = f.ticker?.trim().toUpperCase();
@@ -180,7 +182,11 @@ export function createDesk(opts: DeskOptions = {}) {
   });
 
   const clients = async (db: D1Database) =>
-    (await db.prepare("SELECT id, name, preliminary, created_at, revoked_at FROM api_clients ORDER BY created_at").all()).results;
+    (await db.prepare(
+      `SELECT c.id, c.name, c.preliminary, c.created_at, c.revoked_at, c.last_used_at,
+         COALESCE((SELECT u.requests FROM api_usage u WHERE u.client_id = c.id AND u.day = date('now')), 0) AS requests_today
+       FROM api_clients c ORDER BY c.created_at`,
+    ).all()).results;
 
   desk.get("/keys", async (c) => c.html(<KeysPage clients={await clients(c.env.DB)} />));
 

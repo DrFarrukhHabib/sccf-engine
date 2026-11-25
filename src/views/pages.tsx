@@ -148,8 +148,9 @@ export const QueuePage = ({ drafts, returned, questions, approved, eligible, pro
   );
 };
 
-export const RulingPage = ({ r, checks, changes, previous, isOpen, questions, decidingText }: {
+export const RulingPage = ({ r, checks, changes, previous, isOpen, questions, decidingText, publicText = null, published = false }: {
   r: Row; checks: Row[]; changes: Change[] | null; previous: Row | null; isOpen: boolean; questions: Row[]; decidingText: string | null;
+  publicText?: Row | null; published?: boolean;
 }) => (
   <Layout title={`${r.name} (${r.ticker})`} active="/desk/queue">
     <a class="back" href="/desk/queue">← Back to To do</a>
@@ -173,6 +174,21 @@ export const RulingPage = ({ r, checks, changes, previous, isOpen, questions, de
       </table>
     </Section>
 
+    {publicText && (
+      <Section cls="s-main" title="What users will read" hint="This is exactly what every client receives. Approving the ruling approves this text.">
+        <table class="kv">
+          <tbody>
+            <tr><td>Status</td><td><Status status={r.status} big /></td></tr>
+            {publicText.usage_line && <tr><td>What to do</td><td><b>{publicText.usage_line}</b></td></tr>}
+            <tr><td>What it is</td><td>{publicText.what ?? <span class="flag">Missing</span>}</td></tr>
+            <tr><td>Why this ruling</td><td>{publicText.why ?? <span class="flag">Missing</span>}</td></tr>
+            <tr><td>How to use it</td><td>{publicText.how ?? <span class="flag">Missing</span>}</td></tr>
+            <tr><td>Things to know</td><td>{publicText.know ?? <span class="muted">None</span>}</td></tr>
+          </tbody>
+        </table>
+      </Section>
+    )}
+
     {questions.length > 0 && (
       <Section cls="s-q" title="Question waiting for your answer" count={questions.length}>
         {questions.map((q) => <QuestionBox q={q} back={`/desk/rulings/${r.id}`} />)}
@@ -188,6 +204,16 @@ export const RulingPage = ({ r, checks, changes, previous, isOpen, questions, de
             <p style="margin:8px 0 0"><button class="ghost">Return with this note</button></p>
           </form>
         </div>
+      </Section>
+    )}
+
+    {published && (
+      <Section cls="s-chg" title="Withdraw this published ruling">
+        <form method="post" action={`/desk/rulings/${r.id}/withdraw`}>
+          <p class="muted" style="margin:0 0 8px">It stops being public at once and every client is told. The token's previous approved ruling, if any, applies again.</p>
+          <textarea name="note" rows={2} required placeholder="Why it is withdrawn"></textarea>
+          <p style="margin:8px 0 0"><button class="ghost">Withdraw</button></p>
+        </form>
       </Section>
     )}
 
@@ -371,11 +397,13 @@ export const KeysPage = ({ clients, newKey, name }: { clients: Row[]; newKey?: s
     <Section cls="s-lib" title="Clients" count={clients.length}>
       {clients.length === 0 ? <p class="empty">Nothing here.</p> : (
         <table>
-          <thead><tr><th>Client</th><th>Preliminary</th><th>Created</th><th>Revoked</th><th></th></tr></thead>
+          <thead><tr><th>Client</th><th>Preliminary</th><th>Created</th><th>Last used</th><th>Requests today</th><th>Revoked</th><th></th></tr></thead>
           <tbody>
             {clients.map((c) => (
               <tr>
-                <td>{c.name}</td><td>{c.preliminary ? "Yes" : "No"}</td><td>{c.created_at}</td><td>{c.revoked_at ?? ""}</td>
+                <td>{c.name}</td><td>{c.preliminary ? "Yes" : "No"}</td><td>{String(c.created_at).slice(0, 10)}</td>
+                <td>{c.last_used_at ? String(c.last_used_at).slice(0, 16).replace("T", " ") : <span class="muted">Never</span>}</td>
+                <td>{c.requests_today}</td><td>{c.revoked_at ?? ""}</td>
                 <td>{!c.revoked_at && <form class="inline" method="post" action={`/desk/keys/${c.id}/revoke`}><button class="ghost">Revoke</button></form>}</td>
               </tr>
             ))}
