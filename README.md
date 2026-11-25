@@ -9,7 +9,7 @@
 Setup status (see `docs/switch-over.md`): database, catalog, backups, the CoinMarketCap key, Cloudflare Access for the desk, and the migration from the Review Desk (21 November 2026: 165 assets, 85 approved rulings, 9 drafts) are done. Still to do: the analyst key, a restore test, and the pilot.
 
 
-The Shariah screening engine behind SCCF rulings: the rulings database, the Scholar's review desk, the AI analyst's write access and the read-only client API. Powered by Azka Advisors.
+Najm Screener: Shariah screening for crypto. The rulings database, the Scholar's Desk, the AI Analyst's write access and the read-only Najm Screener API, under the SCCF methodology.
 
 ## For the Shariah Scholar
 

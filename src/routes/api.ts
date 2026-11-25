@@ -3,7 +3,7 @@ import { hashKey } from "../auth/keys";
 import { footerFor, type PublicCard } from "../public/build";
 import type { Bindings } from "../index";
 
-const POWERED_BY = "Azka Advisors";
+const POWERED_BY = "Najm Screener";
 const DISCLAIMER = "Preliminary: prepared with AI and not yet reviewed by a Shariah Scholar; it may contain errors.";
 const STATUSES = ["Halal", "Doubtful", "Haram", "Check the company"];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;

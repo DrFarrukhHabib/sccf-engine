@@ -13,7 +13,7 @@ const LEAK = /\b(H[12]|D[1-5]|R[1-7]|S1)\b|deciding|trust|rating|stars|cmc|coinm
 const card = (statusLabel: string) => JSON.stringify({
   statusLabel, usageLine: "Use it only in permissible activities.",
   tiles: [{ title: "Is it an asset?", result: "Pass", line: "Yes." }], activity: { hold: "Yes" },
-  footer: "Preliminary: prepared with AI and not yet reviewed by a Shariah Scholar; it may contain errors. Last reviewed 1 November 2026. This is a Shariah opinion, not investment advice. Powered by Azka Advisors.",
+  footer: "Preliminary: prepared with AI and not yet reviewed by a Shariah Scholar; it may contain errors. Last reviewed 1 November 2026. This is a Shariah opinion, not investment advice. Powered by Najm Screener.",
 });
 
 async function ruling(id: string, asset: string, status: string, code: string, created: string, signedAt?: string, opts: { returned?: boolean } = {}) {
@@ -56,11 +56,11 @@ describe("public API v1", () => {
 
   it("an unsigned ruling never appears for a full client", async () => {
     const body = (await (await get("/v1/rulings")).json()) as any;
-    expect(body.poweredBy).toBe("Azka Advisors");
+    expect(body.poweredBy).toBe("Najm Screener");
     expect(body.rulings.map((r: any) => r.assetId).sort()).toEqual(["A-1", "A-2", "A-3"]);
     const usdc = body.rulings.find((r: any) => r.assetId === "A-1");
     expect(usdc).toMatchObject({ status: "Doubtful", preliminary: false, approvedAt: "2026-12-10" });
-    expect(usdc.footer).toBe("Approved by a Shariah Scholar on 10 December 2026. Last reviewed 10 December 2026. This is a Shariah opinion, not investment advice. Powered by Azka Advisors.");
+    expect(usdc.footer).toBe("Approved by a Shariah Scholar on 10 December 2026. Last reviewed 10 December 2026. This is a Shariah opinion, not investment advice. Powered by Najm Screener.");
     expect((await get("/v1/assets/A-4")).status).toBe(404);
   });
 
@@ -87,7 +87,7 @@ describe("public API v1", () => {
 
   it("returns one asset", async () => {
     const body = (await (await get("/v1/assets/A-2")).json()) as any;
-    expect(body).toMatchObject({ poweredBy: "Azka Advisors", ruling: { assetId: "A-2", ticker: "sfrxETH", status: "Haram" } });
+    expect(body).toMatchObject({ poweredBy: "Najm Screener", ruling: { assetId: "A-2", ticker: "sfrxETH", status: "Haram" } });
   });
 
   it("status on a date returns the ruling live on that date", async () => {
@@ -143,7 +143,7 @@ describe("public API v1", () => {
   it("exports JSON and CSV with version, date and a SHA-256 fingerprint", async () => {
     const res = await get("/v1/export.json");
     const body = (await res.json()) as any;
-    expect(body).toMatchObject({ poweredBy: "Azka Advisors", version: "1", count: 3 });
+    expect(body).toMatchObject({ poweredBy: "Najm Screener", version: "1", count: 3 });
     expect(body.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(body.rulings)));
     expect(body.fingerprint).toBe([...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join(""));
@@ -151,7 +151,7 @@ describe("public API v1", () => {
     const csv = await get("/v1/export.csv");
     expect(csv.headers.get("Content-Type")).toMatch(/text\/csv/);
     expect(csv.headers.get("X-SCCF-Fingerprint")).toMatch(/^[0-9a-f]{64}$/);
-    expect(csv.headers.get("X-Powered-By")).toBe("Azka Advisors");
+    expect(csv.headers.get("X-Powered-By")).toBe("Najm Screener");
     const text = await csv.text();
     expect(text.split("\n")[0]).toBe("asset_id,name,ticker,status,usage_line,approved_at,last_reviewed,powered_by");
     expect(text).toContain('"A-2","Staked Frax Ether","sfrxETH","Haram"');

@@ -102,8 +102,8 @@ const MENU: [string, string][] = [
   ["/desk/queue", "To do"],
   ["/desk/questions", "Questions"],
   ["/desk/library", "Approved"],
-  ["/desk/rules", "Rule proposals"],
-  ["/desk/keys", "Client keys"],
+  ["/desk/rules", "Rule changes"],
+  ["/desk/keys", "API keys"],
 ];
 
 export function Layout({ title, active, children }: { title: string; active?: string; children: Child }) {
@@ -112,7 +112,7 @@ export function Layout({ title, active, children }: { title: string; active?: st
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>{title} · SCCF Review Desk</title>
+        <title>{title} · Scholar's Desk · Najm Screener</title>
         <style>{css}</style>
       </head>
       <body>
@@ -121,7 +121,7 @@ export function Layout({ title, active, children }: { title: string; active?: st
           <div class="bar">
             <a class="brand" href="/desk/queue">
               <span class="logo">S</span>
-              <span>SCCF Review Desk<small>Powered by Azka Advisors</small></span>
+              <span>Scholar's Desk<small>Najm Screener</small></span>
             </a>
             <nav>{MENU.map(([href, label]) => <a href={href} class={href === active ? "on" : ""}>{label}</a>)}</nav>
           </div>

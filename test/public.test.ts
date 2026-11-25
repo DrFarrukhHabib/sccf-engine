@@ -13,7 +13,7 @@ beforeAll(async () => {
 });
 
 const footerApproved =
-  "Approved by a Shariah Scholar on 3 November 2026. Last reviewed 3 November 2026. This is a Shariah opinion, not investment advice. Powered by Azka Advisors.";
+  "Approved by a Shariah Scholar on 3 November 2026. Last reviewed 3 November 2026. This is a Shariah opinion, not investment advice. Powered by Najm Screener.";
 
 const usdc: PublicAsset = {
   section: "FIAT", whatItIs: "a dollar stablecoin backed by reserves",
@@ -91,7 +91,7 @@ describe("buildPublic", () => {
   it("uses the preliminary footer before approval", () => {
     const card = buildPublic(catalog, usdcOutcome(), { ...usdc, approvedAt: null });
     expect(card.footer).toBe(
-      "Preliminary: prepared with AI and not yet reviewed by a Shariah Scholar; it may contain errors. Last reviewed 3 November 2026. This is a Shariah opinion, not investment advice. Powered by Azka Advisors.",
+      "Preliminary: prepared with AI and not yet reviewed by a Shariah Scholar; it may contain errors. Last reviewed 3 November 2026. This is a Shariah opinion, not investment advice. Powered by Najm Screener.",
     );
   });
 
