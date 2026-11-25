@@ -304,3 +304,14 @@ describe("desk pages", () => {
     for (const p of ["/desk/questions", "/desk/rules", "/desk/library"]) expect((await desk(p)).status).toBe(200);
   });
 });
+
+describe("weekly report on the desk", () => {
+  it("the Scholar's desk serves the same weekly report as the analyst door, behind Access", async () => {
+    const res = await desk("/desk/report?days=7");
+    expect(res.status).toBe(200);
+    const r = (await res.json()) as any;
+    expect(r.days).toBe(7);
+    expect(r).toHaveProperty("backfillRemaining");
+    expect((await desk("/desk/report", { jwt: null })).status).not.toBe(200);
+  });
+});
