@@ -100,6 +100,35 @@ async function approvedRuling(db: D1Database, assetId: string) {
   ).bind(assetId).first<{ status: Status; code: Code }>();
 }
 
+const WEB = /^https?:\/\/[^\s]+$/i;
+const SCHOLAR = /^scholar-answer:(.+)$/;
+
+/** The research quality floor. Returns what is missing, or null when the draft passes. */
+async function qualityFloor(db: D1Database, assetId: string, answers: Record<string, Answer>,
+  evidence: NonNullable<DraftBody["evidence"]>): Promise<string | null> {
+  const web = new Set<string>();
+  for (const [id, a] of Object.entries(answers)) {
+    const ev = evidence[id];
+    const url = ev?.sourceUrl?.trim();
+    if (!url) {
+      if (a === "yes") return `Cite a source for ${id}: every "yes" answer needs one`;
+      continue;
+    }
+    const scholar = url.match(SCHOLAR);
+    if (scholar) {
+      const q = await db.prepare("SELECT 1 FROM questions WHERE id = ? AND asset_id = ? AND answer IS NOT NULL").bind(scholar[1], assetId).first();
+      if (!q) return `${id} cites ${url}, which is not an answered question for ${assetId}`;
+      continue;
+    }
+    if (!WEB.test(url)) return `${id}: the source must be a web address (https://…) or scholar-answer:<question id>`;
+    if (!ev?.accessedAt?.trim()) return `${id}: give the access date for ${url}`;
+    if (!ev?.evidence?.trim()) return `${id}: say what ${url} shows`;
+    web.add(url.replace(/[#?].*$/, "").replace(/\/$/, "").toLowerCase());
+  }
+  if (web.size < 2) return `A draft must rest on at least two different web sources (found ${web.size})`;
+  return null;
+}
+
 analyst.post("/drafts", async (c) => {
   const db = c.env.DB;
   const b = await c.req.json<DraftBody>();
@@ -109,6 +138,17 @@ analyst.post("/drafts", async (c) => {
   if (b.supersedes) {
     const prev = await db.prepare("SELECT asset_id FROM rulings WHERE id = ?").bind(b.supersedes).first<{ asset_id: string }>();
     if (!prev || prev.asset_id !== b.assetId) return c.json(fail(`supersedes must name an earlier ruling of ${b.assetId}`), 422);
+  }
+  // A redraft that names nothing replaces the token's open draft (unapproved, not returned, not already replaced).
+  if (!b.supersedes) {
+    const open = await db.prepare(
+      `SELECT r.id FROM rulings r WHERE r.asset_id = ?
+         AND NOT EXISTS (SELECT 1 FROM signatures s WHERE s.ruling_id = r.id AND s.role IN ('approved','standing'))
+         AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ruling_id = r.id AND e.type = 'Return')
+         AND NOT EXISTS (SELECT 1 FROM rulings n WHERE n.supersedes = r.id)
+       ORDER BY r.created_at DESC, r.rowid DESC LIMIT 1`,
+    ).bind(b.assetId).first<{ id: string }>();
+    if (open) b.supersedes = open.id;
   }
   const catalog = await loadCatalog(db, "1.0");
   // Every draft passes the ZERO gate first ("Is it an asset?"): it can stop the review or send it to WRAP.
@@ -144,6 +184,13 @@ analyst.post("/drafts", async (c) => {
   if (outcome.route) return c.json(fail(`This table routes to ${outcome.route}: submit the answers for that table`), 422);
   if (!outcome.status || !outcome.code) return c.json(fail("No status or code could be derived: raise a question for the Scholar"), 422);
 
+  // Quality floor: every "yes" cites a source, web sources carry an access date, and a draft rests on at least two web sources.
+  const answered: Record<string, Answer> = { ...b.answers };
+  for (const r of b.rewards ?? []) Object.assign(answered, r.answers);
+  if (b.feature) Object.assign(answered, b.feature.answers);
+  const floor = await qualityFloor(db, b.assetId, answered, b.evidence ?? {});
+  if (floor) return c.json(fail(floor), 422);
+
   const now = new Date().toISOString();
   let card;
   try {
@@ -157,7 +204,8 @@ analyst.post("/drafts", async (c) => {
   const allAnswers: Record<string, Answer> = { ...b.answers };
   for (const r of b.rewards ?? []) Object.assign(allAnswers, r.answers);
   if (b.feature) Object.assign(allAnswers, b.feature.answers);
-  const reviewType = b.supersedes ? "Re-review" : "First";
+  // A re-review revisits an approved ruling; until something is approved, every draft is a first review.
+  const reviewType = (await approvedRuling(db, b.assetId)) ? "Re-review" : "First";
 
   await db.batch([
     db.prepare(
@@ -213,7 +261,9 @@ analyst.post("/assets", async (c) => {
 /** The Scholar's answers that the analyst has not yet acted on. */
 analyst.get("/answers", async (c) => {
   const { results } = await c.env.DB.prepare(
-    "SELECT id, asset_id, ruling_id, question, context, answer, answered_at FROM questions WHERE answer IS NOT NULL AND applied = 0 ORDER BY answered_at",
+    `SELECT q.id, q.asset_id, q.ruling_id, q.question, q.context, q.answer, q.answered_at,
+       (SELECT r.id FROM rulings r WHERE r.asset_id = q.asset_id ORDER BY r.created_at DESC, r.rowid DESC LIMIT 1) AS latestRulingId
+     FROM questions q WHERE q.answer IS NOT NULL AND q.applied = 0 ORDER BY q.answered_at`,
   ).all();
   return c.json(results);
 });

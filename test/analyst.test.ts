@@ -9,7 +9,18 @@ import { fetchInfo, fetchListings } from "../src/market/cmc";
 const db = env.DB;
 const auth = { Authorization: "Bearer test-analyst-key", "Content-Type": "application/json" };
 const call = (path: string, init: RequestInit = {}) => app.request(path, { ...init, headers: { ...auth, ...(init.headers ?? {}) } }, env);
-const post = (path: string, body: unknown) => call(path, { method: "POST", body: JSON.stringify(body) });
+const rawPost = (path: string, body: unknown) => call(path, { method: "POST", body: JSON.stringify(body) });
+/** Sample drafts get a cited source for every answer, as the quality floor requires. */
+const sourced = (b: any) => {
+  const answers = { ...(b.answers ?? {}) };
+  for (const r of b.rewards ?? []) Object.assign(answers, r.answers);
+  if (b.feature) Object.assign(answers, b.feature.answers);
+  const evidence = { ...(b.evidence ?? {}) };
+  for (const id of Object.keys(answers))
+    if (!evidence[id]) evidence[id] = { evidence: `Checked for ${id}`, sourceUrl: `https://example.org/${id}`, accessedAt: "2026-11-25" };
+  return { ...b, evidence };
+};
+const post = (path: string, body: any) => rawPost(path, path === "/analyst/drafts" ? sourced(body) : body);
 
 const ZERO_OK = { "ZERO-1": "yes", "ZERO-2": "no", "ZERO-3": "no", "ZERO-4": "no" } as const;
 const ZERO_WRAP = { "ZERO-1": "yes", "ZERO-2": "yes", "ZERO-3": "no", "ZERO-4": "no" } as const;
@@ -17,7 +28,7 @@ const ZERO_WRAP = { "ZERO-1": "yes", "ZERO-2": "yes", "ZERO-3": "no", "ZERO-4": 
 const usdcDraft = {
   assetId: "SCCF-0104", section: "FIAT", confidence: "High",
   answers: { ...ZERO_OK, "FIAT-1": "no", "FIAT-2": "no", "FIAT-3": "no", "FIAT-3B": "no", "FIAT-4": "no" },
-  evidence: { "FIAT-1": { evidence: "Circle keeps reserve income", sourceUrl: "https://www.circle.com/transparency" } },
+  evidence: { "FIAT-1": { evidence: "Circle keeps reserve income", sourceUrl: "https://www.circle.com/transparency", accessedAt: "2026-11-25" } },
   rewards: [{ section: "REWARD", answers: { "REWARD-1": "no", "REWARD-2": "yes", "REWARD-3": "no" } }],
   publicFields: { what: "a dollar stablecoin backed by reserves", why: "It pays its holders nothing.", how: "Exchange it on the spot.", know: "No concerns found." },
 };
@@ -47,9 +58,40 @@ describe("analyst door", () => {
     expect(await isPublic(db, body.rulingId)).toBe(false);
     const checks = await db.prepare("SELECT check_id, answer, source_url FROM ruling_checks WHERE ruling_id = ? ORDER BY check_id").bind(body.rulingId).all();
     expect(checks.results).toContainEqual({ check_id: "FIAT-1", answer: "no", source_url: "https://www.circle.com/transparency" });
-    expect(checks.results).toContainEqual({ check_id: "REWARD-2", answer: "yes", source_url: null });
+    expect(checks.results).toContainEqual({ check_id: "REWARD-2", answer: "yes", source_url: "https://example.org/REWARD-2" });
     const pub = await db.prepare("SELECT card_json FROM public_fields WHERE ruling_id = ?").bind(body.rulingId).first<{ card_json: string }>();
     expect(JSON.parse(pub!.card_json).tiles[3].result).toBe("Concern");
+  });
+
+  it("quality floor: refuses a draft whose 'yes' answer cites no source", async () => {
+    const b = sourced(usdcDraft);
+    delete b.evidence["ZERO-1"];
+    const res = await rawPost("/analyst/drafts", b);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as any).error).toMatch(/ZERO-1/);
+  });
+
+  it("quality floor: refuses a draft resting on fewer than two web sources, or a web source without an access date", async () => {
+    const one = { ...usdcDraft, evidence: { "ZERO-1": { evidence: "Site", sourceUrl: "https://www.circle.com/usdc", accessedAt: "2026-11-25" },
+      "REWARD-2": { evidence: "Same site", sourceUrl: "https://www.circle.com/usdc", accessedAt: "2026-11-25" } } };
+    const r1 = await rawPost("/analyst/drafts", one);
+    expect(r1.status).toBe(422);
+    expect(((await r1.json()) as any).error).toMatch(/two/);
+    const b = sourced(usdcDraft);
+    b.evidence["ZERO-1"] = { evidence: "Site", sourceUrl: "https://www.circle.com/usdc" };
+    const r2 = await rawPost("/analyst/drafts", b);
+    expect(r2.status).toBe(422);
+    expect(((await r2.json()) as any).error).toMatch(/access date/);
+  });
+
+  it("quality floor: the Scholar's answered question counts as the source for a 'yes'", async () => {
+    await db.prepare("INSERT OR IGNORE INTO questions (id, asset_id, question, answer, answered_at) VALUES ('Q-src', 'SCCF-0104', 'Reward?', 'Not halal', '2026-11-24')").run();
+    const ok = sourced(usdcDraft);
+    ok.evidence["REWARD-2"] = { evidence: "The Scholar's answer", sourceUrl: "scholar-answer:Q-src" };
+    expect((await rawPost("/analyst/drafts", ok)).status).toBe(201);
+    const bad = sourced(usdcDraft);
+    bad.evidence["REWARD-2"] = { evidence: "No such answer", sourceUrl: "scholar-answer:Q-nope" };
+    expect((await rawPost("/analyst/drafts", bad)).status).toBe(422);
   });
 
   it("refuses a draft whose public text leaks", async () => {
@@ -129,6 +171,21 @@ describe("analyst door", () => {
     expect((await post("/analyst/questions/Q-A/applied", {})).status).toBe(200);
     const after = (await (await call("/analyst/answers")).json()) as any[];
     expect(after.map((q) => q.id)).not.toContain("Q-A");
+  });
+
+  it("each answer carries the token's latest ruling, so a redraft can name what it replaces", async () => {
+    await db.prepare("INSERT OR IGNORE INTO questions (id, asset_id, question, answer, answered_at) VALUES ('Q-L', 'SCCF-0104', 'Again?', 'Yes', '2026-11-25')").run();
+    const latest = await db.prepare("SELECT id FROM rulings WHERE asset_id = 'SCCF-0104' ORDER BY created_at DESC, rowid DESC LIMIT 1").first<{ id: string }>();
+    const ans = ((await (await call("/analyst/answers")).json()) as any[]).find((q) => q.id === "Q-L");
+    expect(ans.latestRulingId).toBe(latest!.id);
+  });
+
+  it("a redraft that names nothing is linked to the token's open draft, and stays a First review while nothing is approved", async () => {
+    await db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class) VALUES ('SCCF-0210', 'Redraft Coin', 'RDC', 'FIAT')").run();
+    const first = (await (await post("/analyst/drafts", { ...usdcDraft, assetId: "SCCF-0210" })).json()) as any;
+    const second = (await (await post("/analyst/drafts", { ...usdcDraft, assetId: "SCCF-0210" })).json()) as any;
+    const row = await db.prepare("SELECT supersedes, review_type FROM rulings WHERE id = ?").bind(second.rulingId).first();
+    expect(row).toEqual({ supersedes: first.rulingId, review_type: "First" });
   });
 
   it("lists open requests", async () => {

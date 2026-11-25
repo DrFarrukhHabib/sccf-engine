@@ -268,6 +268,17 @@ describe("desk pages", () => {
     expect((await desk("/desk/waves", form({ size: "0" }))).status).toBe(422);
   });
 
+  it("a draft replaced by a newer one leaves the desk, and review types read cleanly", async () => {
+    await db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class, old_status, old_code) VALUES ('SCCF-0905', 'Twice Coin', 'TWC', 'UTIL', 'Halal', 'H1')").run();
+    await draft("D-twice-old", "SCCF-0905", "Halal", "H1");
+    await db.prepare(`INSERT INTO rulings (id, asset_id, criteria_version, status, code, confidence, review_type, deciding_check, supersedes, created_at)
+      VALUES ('D-twice-new', 'SCCF-0905', '1.0', 'Doubtful', 'D2', 'High', 'Re-review', 'UTIL-2', 'D-twice-old', '2026-11-25')`).run();
+    const html = await (await desk("/desk/queue")).text();
+    expect(html).toContain("/desk/rulings/D-twice-new");
+    expect(html).not.toContain("/desk/rulings/D-twice-old");
+    expect(html).not.toContain("Re-review review");
+  });
+
   it("lists questions, rule proposals and the library", async () => {
     for (const p of ["/desk/questions", "/desk/rules", "/desk/library"]) expect((await desk(p)).status).toBe(200);
   });

@@ -18,7 +18,8 @@ const envConfig = (env: Bindings): AccessConfig => ({
 });
 
 const OPEN = `NOT EXISTS (SELECT 1 FROM signatures s WHERE s.ruling_id = r.id AND s.role IN ('approved','standing'))
-  AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ruling_id = r.id AND e.type = 'Return')`;
+  AND NOT EXISTS (SELECT 1 FROM events e WHERE e.ruling_id = r.id AND e.type = 'Return')
+  AND NOT EXISTS (SELECT 1 FROM rulings n WHERE n.supersedes = r.id)`;
 const UNANSWERED = `(SELECT COUNT(*) FROM questions q WHERE q.answer IS NULL AND (q.asset_id = r.asset_id OR q.ruling_id = r.id))`;
 /** Drafts the Scholar may approve in one click: same status as the old system, High confidence, no open question. */
 const MATCHING = `${OPEN} AND r.confidence = 'High' AND a.old_status = r.status AND ${UNANSWERED} = 0`;

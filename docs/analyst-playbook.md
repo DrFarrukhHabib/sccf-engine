@@ -16,7 +16,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 | `POST /requests/:id/done` | Close a Scholar token request once its token is drafted: `{result}` (one line, e.g. "Registered as SCCF-0170 and drafted"). |
 | `GET /requests` | Open requests from the Scholar (next batch, re-review, card change, new listing). |
 | `POST /drafts` | Submit one review (below). The engine derives the outcome, builds the public card and stores a draft. |
-| `GET /answers` | The Scholar's answers you have not yet acted on: `[{id, assetId, rulingId, question, answer}]`. |
+| `GET /answers` | The Scholar's answers you have not yet acted on: `[{id, asset_id, ruling_id, question, answer, latestRulingId}]`. `latestRulingId` is the token's newest ruling: put it in `supersedes` when you redraft. |
 | `POST /questions/:id/applied` | Mark an answer as acted on, once you have done what it says. |
 | `POST /questions` | A question for the Scholar: `{assetId, question, context, options}`. |
 | `POST /events` | Log a `First`, `Re-review`, `Trigger`, `Migration` or `Note` event. |
@@ -24,7 +24,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 
 ## Start of every run: the Scholar's answers
 
-Before any new work, `GET /answers`. For each answer, do what it says: usually submit a fresh draft for that token that follows the answer (with `supersedes` set to the earlier draft's ruling id), or log a `Note` event if nothing needs to change. Then `POST /questions/:id/applied`. The Scholar's answer is final for that token; never argue it back.
+Before any new work, `GET /answers`. For each answer, do what it says: usually submit a fresh draft for that token that follows the answer, with `supersedes` = its `latestRulingId`, or log a `Note` event if nothing needs to change. For the check the answer decides, cite the answer itself as the source: `sourceUrl: "scholar-answer:<question id>"`. Then `POST /questions/:id/applied`. The Scholar's answer is final for that token; never argue it back. (If you forget `supersedes`, the engine links the draft to the token's open draft itself.)
 
 ## Choosing the batch
 
@@ -42,13 +42,23 @@ Re-reviews in `reReviews` come after the batch, up to 15 per run. The wave is fr
 1. **Identity.** Confirm the token: name, ticker, an official or recognised source, chains and contracts.
 2. **Class.** Pick the catalog section for what the token gives its holder (FIAT, CRYPTO, GOLD, NATIVE, WRAP, LST, EXCH, RWA, LAUNCH, DM, UTIL, GAME, FAN, SOCIAL, NFT, DEBT, INS, INDEX, MEME, STOCK). Wrapped or bridged copies start at ZERO-2 and are ruled through WRAP.
 3. **Answer every check** from `GET /catalog?section=ZERO,<KEY>`: ZERO-1 to ZERO-4 first, then the class section in its order. Put the ZERO answers in the same `answers` object; the engine refuses a draft without them, and ZERO alone can decide the outcome (Doubtful D1, Haram R7) or send it to WRAP. Answer with `yes`, `no` or `not_found`. Never guess: a fact you could not find is `not_found`. Fraud checks (OUT, FIAT-4) count only proven findings by regulators or courts.
-4. **Evidence.** For each answer that matters, give `{evidence, sourceUrl, accessedAt}`. Primary sources first.
+4. **Evidence.** Give `{evidence, sourceUrl, accessedAt}` for every answer you researched. The engine refuses a draft that breaks the research standard below.
 5. **Rewards.** If the token has reward programmes, answer the REWARD (stablecoins) or AIR (airdrops) table in `rewards`.
 6. **Codes.** Where a check's outcome is "coded by that business" (NATIVE-1, LST-4, EXCH-1, INDEX-2/3/4, AIR), give the code in `codes`; otherwise the engine sends it to the Scholar without one.
 7. **Public fields.** `what` (the class in plain words, completing "What it is: …"), `why`, `how`, `know`. Plain words; no codes, rule numbers, exact figures, names, tool names, charity or version numbers. The engine refuses a draft that breaks these rules.
 8. **Submit** `POST /drafts` with `{assetId, section, answers, evidence, rewards, codes, confidence, publicFields, cardUrl, supersedes}` (`supersedes` = the earlier ruling id for a re-review).
 
 If the engine answers `422` because the table routes elsewhere (for example FIAT-2 to CRYPTO), submit the routed table. If it says no status could be derived, raise a question.
+
+## Research standard (the engine enforces the first three)
+
+1. Every `yes` answer cites a source: a web page (`https://…`, with `accessedAt` and a line on what it shows) or `scholar-answer:<question id>` for a point the Scholar decided.
+2. Every web source carries its access date and a line saying what it shows.
+3. Each draft rests on at least two different web pages.
+4. Read the pages themselves (WebFetch or curl), not search snippets. For each token read at least three primary sources where they exist: the official docs or whitepaper, the token or tokenomics page, and one of the governance forum, the contract on a block explorer, an audit, or a regulator or court record.
+5. If a primary page refuses access, try another route to the same source (its docs site, GitHub, the governance forum, an archived copy) before answering `not_found`.
+6. Work one token at a time, from research to submitted draft, before starting the next. Time is not a constraint; accuracy is.
+7. Confidence: `High` only when every decisive fact comes from a primary source you read; `Medium` when a decisive fact rests on a secondary source; `Low` when a decisive fact is `not_found` or the sources disagree.
 
 ## What reaches the Scholar
 
