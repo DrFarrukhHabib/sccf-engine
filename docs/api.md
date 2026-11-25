@@ -1,14 +1,14 @@
-# SCCF Engine: Client API v1 — Developer Guide
+# Najm Screener API v1 — Developer Guide
 
-The SCCF engine publishes Shariah rulings on crypto tokens, each approved by a Shariah Scholar under the SCCF methodology. This guide is everything a developer needs to connect an app (for example Najm) to it.
+Najm Screener publishes Shariah rulings on crypto tokens. Each ruling is researched by the AI Analyst and approved by a Shariah Scholar under the SCCF methodology. This guide is everything a developer needs to connect an app to the Najm Screener API (the Screener API for short).
 
 - **Base URL:** `https://sccf-engine.doctorfarrukhhabib.workers.dev/v1`
 - **Format:** JSON (UTF-8), plus one CSV export. All times are UTC.
-- **Attribution:** every response carries `"poweredBy": "Azka Advisors"`. Your app must show "Powered by Azka Advisors" wherever it shows a ruling.
+- **Attribution:** every response carries `"poweredBy": "Najm Screener"`. Your app must show "Powered by Najm Screener" wherever it shows a ruling.
 
 ## 1. Access
 
-Each client gets its own key from the Scholar's desk. Send it on every request:
+Each client gets its own API key from the Scholar's Desk. Send it on every request:
 
 ```
 X-API-Key: sccf_…
@@ -52,7 +52,7 @@ Every endpoint returns rulings in this one shape, the same for every client. Sho
   "nextReview": "2027-05-13",
   "updatedAt": "2026-11-13T09:46:20.120Z",
   "preliminary": false,
-  "footer": "Approved by a Shariah Scholar on 13 November 2026. Last reviewed 13 November 2026. This is a Shariah opinion, not investment advice. Powered by Azka Advisors.",
+  "footer": "Approved by a Shariah Scholar on 13 November 2026. Last reviewed 13 November 2026. This is a Shariah opinion, not investment advice. Powered by Najm Screener.",
   "criteria": "SCCF 1.0"
 }
 ```
@@ -84,20 +84,20 @@ The record never contains internal codes, rule numbers, research notes, trust ra
 
 ## 3. Endpoints
 
-All are `GET`. Errors return `{ "error": "…", "poweredBy": "Azka Advisors" }`.
+All are `GET`. Errors return `{ "error": "…", "poweredBy": "Najm Screener" }`.
 
 ### `/rulings`
 All current rulings. Optional filters: `status` (one of the status values above, with `Haram` also matching `Haram: not an asset`) and `class`.
 ```
 GET /v1/rulings?status=Halal
-→ { "poweredBy": "Azka Advisors", "count": 212, "rulings": [ …records… ] }
+→ { "poweredBy": "Najm Screener", "count": 212, "rulings": [ …records… ] }
 ```
 
 ### `/assets/{assetId}`
 One token's current ruling. `404` if it has none published.
 ```
 GET /v1/assets/SCCF-0104
-→ { "poweredBy": "Azka Advisors", "ruling": { …record… } }
+→ { "poweredBy": "Najm Screener", "ruling": { …record… } }
 ```
 
 ### `/assets/{assetId}/on/{YYYY-MM-DD}`
@@ -111,7 +111,7 @@ Find a token the way your app knows it. Give exactly one of:
 - `network=Ethereum&address=0xA0b8…` (both required; not case-sensitive)
 ```
 GET /v1/lookup?network=Ethereum&address=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
-→ { "poweredBy": "Azka Advisors", "count": 1, "rulings": [ …record… ] }
+→ { "poweredBy": "Najm Screener", "count": 1, "rulings": [ …record… ] }
 ```
 `count: 0` means the engine has no published ruling for that token yet.
 
@@ -120,7 +120,7 @@ What changed since a moment (a date `2026-12-01` or a UTC timestamp `2026-12-01T
 ```
 GET /v1/changes?since=2026-12-01T00:00:00Z
 → {
-    "poweredBy": "Azka Advisors",
+    "poweredBy": "Najm Screener",
     "since": "2026-12-01T00:00:00Z",
     "until": "2026-12-02T03:00:12.441Z",
     "count": 2,
@@ -165,7 +165,7 @@ Fields in version 1 will not be removed, renamed or change meaning. New fields m
 
 ## 8. Display rules (summary)
 
-- Show `status` with `usageLine`; show `footer`; show "Powered by Azka Advisors".
+- Show `status` with `usageLine`; show `footer`; show "Powered by Najm Screener".
 - For preliminary records, always show `disclaimer`.
 - Do not reword `usageLine`, `summary`, `tiles` or `footer`. You may choose which to show (for example the status and usage line in a list, the full summary on a detail screen).
 - The rulings are Shariah opinions, not investment advice.

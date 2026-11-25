@@ -63,10 +63,10 @@ const pct = (n: number, total: number) => (total ? Math.round((n / total) * 1000
 
 /** The newest wave's progress bar, the fast lane, the Scholar's token requests and the two forms. */
 const WavePanel = ({ progress, fastLane, asked }: { progress: WaveProgress | null; fastLane: number; asked: Row[] }) => (
-  <Section cls="s-main" title={progress ? `Wave ${progress.id}: top ${progress.size} by market cap` : "Waves"}>
+  <Section cls="s-main" title={progress ? `Top ${progress.size} list` : "Top tokens list"}>
     {progress ? (
       <>
-        <p class="muted" style="margin:0 0 8px">Frozen from the ranking of {progress.snapshotAt.slice(0, 10)}. The analyst works through it from the top.</p>
+        <p class="muted" style="margin:0 0 8px">Fixed from the ranking of {progress.snapshotAt.slice(0, 10)}. The AI Analyst works through it from the top.</p>
         <div class="pbar" title={`${progress.approved} approved, ${progress.drafted} drafted, ${progress.toGo} to go`}>
           <span class="b-ok" style={`width:${pct(progress.approved, progress.size)}%`}></span>
           <span class="b-dr" style={`width:${pct(progress.drafted, progress.size)}%`}></span>
@@ -75,23 +75,23 @@ const WavePanel = ({ progress, fastLane, asked }: { progress: WaveProgress | nul
           <span data-approved={String(progress.approved)}><i class="dot b-ok"></i><b>{progress.approved}</b> approved</span>
           <span data-drafted={String(progress.drafted)}><i class="dot b-dr"></i><b>{progress.drafted}</b> drafted, waiting for you</span>
           <span data-togo={String(progress.toGo)}><i class="dot b-to"></i><b>{progress.toGo}</b> to go</span>
-          <span><b>{fastLane}</b> in the fast lane (7 nights in the top 100)</span>
+          <span><b>{fastLane}</b> on the fast track (7 nights in the top 100)</span>
         </div>
       </>
-    ) : <p class="empty">No wave has been frozen yet.</p>}
+    ) : <p class="empty">No list has been fixed yet.</p>}
     <div class="forms">
       <form method="post" action="/desk/requests/token" class="card">
         <h3 style="margin-top:0">Ask for a token</h3>
-        <p class="muted" style="margin:0 0 8px">It goes to the front of the analyst's next run.</p>
+        <p class="muted" style="margin:0 0 8px">It goes to the front of the AI Analyst's next run.</p>
         <div class="row2"><input name="name" placeholder="Name, e.g. World Liberty USD" required /><input name="ticker" placeholder="Ticker" required /></div>
         <input name="note" placeholder="Note (optional)" style="margin-top:8px" />
         <p style="margin:10px 0 0"><button>Add to the queue</button></p>
         {asked.length > 0 && <p class="muted" style="margin:10px 0 0">Waiting: {asked.map((a) => a.text).join("; ")}</p>}
       </form>
       <form method="post" action="/desk/waves" class="card">
-        <h3 style="margin-top:0">Freeze the next wave</h3>
-        <p class="muted" style="margin:0 0 8px">When this wave is done, freeze a new list from the latest ranking. Tokens already reviewed are skipped.</p>
-        <div class="row2"><input name="size" type="number" min="1" max="5000" value="1000" required /><button class="ghost">Freeze wave</button></div>
+        <h3 style="margin-top:0">Fix the next list</h3>
+        <p class="muted" style="margin:0 0 8px">When this list is done, fix a new one from the latest ranking. Tokens already reviewed are skipped.</p>
+        <div class="row2"><input name="size" type="number" min="1" max="5000" value="1000" required /><button class="ghost">Fix list</button></div>
       </form>
     </div>
   </Section>
@@ -200,7 +200,7 @@ export const RulingPage = ({ r, checks, changes, previous, isOpen, questions, de
         <div class="actions">
           <form class="inline" method="post" action={`/desk/rulings/${r.id}/approve`}><button class="approve">✓ Approve</button></form>
           <form method="post" action={`/desk/rulings/${r.id}/return`} style="flex:1;min-width:280px">
-            <textarea name="note" rows={2} required placeholder="Or return it: what should the analyst fix?"></textarea>
+            <textarea name="note" rows={2} required placeholder="Or return it: what should the AI Analyst fix?"></textarea>
             <p style="margin:8px 0 0"><button class="ghost">Return with this note</button></p>
           </form>
         </div>
@@ -228,7 +228,7 @@ export const RulingPage = ({ r, checks, changes, previous, isOpen, questions, de
       </Section>
     )}
 
-    <Section cls="s-lib" title="The analyst's answers" count={checks.length}>
+    <Section cls="s-lib" title="The AI Analyst's answers" count={checks.length}>
       <table>
         <thead><tr><th>Check</th><th>Answer</th><th>Evidence</th><th>Source</th></tr></thead>
         <tbody>
@@ -333,7 +333,7 @@ export const RulesPage = ({ rows }: { rows: Row[] }) => {
     </div>
   );
   return (
-    <Layout title="Rule proposals" active="/desk/rules">
+    <Layout title="Rule change requests" active="/desk/rules">
       <Section cls="s-q" num="1" title="Waiting for your decision" count={open.length}
         hint="Changes to the Decision Tables. Once you approve one, Claude applies the exact proposed wording and re-checks the tokens it affects.">
         {open.length === 0 ? <p class="empty">Nothing here.</p> : open.map((r) => <Proposal r={r} />)}
@@ -363,7 +363,7 @@ export const QuestionsPage = ({ open, answered }: { open: Row[]; answered: Row[]
     <Section cls="s-ret" title="Answered" count={answered.length}>
       {answered.length === 0 ? <p class="empty">Nothing here.</p> : (
         <table>
-          <thead><tr><th>Token</th><th>Question</th><th>Your answer</th><th>Answered</th><th>Acted on by the analyst</th></tr></thead>
+          <thead><tr><th>Token</th><th>Question</th><th>Your answer</th><th>Answered</th><th>Acted on by the AI Analyst</th></tr></thead>
           <tbody>
             {answered.map((q) => (
               <tr>
@@ -380,7 +380,7 @@ export const QuestionsPage = ({ open, answered }: { open: Row[]; answered: Row[]
 );
 
 export const KeysPage = ({ clients, newKey, name }: { clients: Row[]; newKey?: string; name?: string }) => (
-  <Layout title="Client keys" active="/desk/keys">
+  <Layout title="API keys" active="/desk/keys">
     {newKey && (
       <div class="note">
         <p>Key for <b>{name}</b>. Copy it now and send it to the client securely: it is shown only this once.</p>

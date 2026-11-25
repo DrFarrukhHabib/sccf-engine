@@ -240,7 +240,7 @@ describe("desk pages", () => {
       db.prepare("INSERT OR IGNORE INTO wave_items (wave, rank, cmc_id, symbol, name) VALUES (1, 3, 'c-zzz', 'ZZZ', 'Unknown Coin')"),
     ]);
     const html = await (await desk("/desk/queue")).text();
-    expect(html).toContain("Wave 1");
+    expect(html).toContain("Top 3 list");
     expect(html).toContain('data-approved="1"');
     expect(html).toContain('data-drafted="1"');
     expect(html).toContain('data-togo="1"');
@@ -313,5 +313,17 @@ describe("weekly report on the desk", () => {
     expect(r.days).toBe(7);
     expect(r).toHaveProperty("backfillRemaining");
     expect((await desk("/desk/report", { jwt: null })).status).not.toBe(200);
+  });
+});
+
+describe("Najm Screener names on the desk", () => {
+  it("the desk is the Scholar's Desk of Najm Screener, with plain-English page names", async () => {
+    const html = await (await desk("/desk/queue")).text();
+    expect(html).toContain("Scholar&#39;s Desk");
+    expect(html).toContain("Najm Screener");
+    expect(html).toContain("API keys");
+    expect(html).toContain("Rule changes");
+    expect(html).not.toContain("SCCF Review Desk");
+    expect(html).not.toContain("Azka");
   });
 });

@@ -43,7 +43,7 @@ export const footerFor = (approvedAt: string | null, lastReviewed: string): stri
       : "Preliminary: prepared with AI and not yet reviewed by a Shariah Scholar; it may contain errors.",
     `Last reviewed ${longDate(lastReviewed)}.`,
     "This is a Shariah opinion, not investment advice.",
-    "Powered by Azka Advisors.",
+    "Powered by Najm Screener.",
   ].join(" ");
 
 const tileNo = (c: Check | undefined) => (c?.tile ? Number(c.tile[0]) : 0);
