@@ -47,7 +47,7 @@ const DraftTable = ({ rows }: { rows: Row[] }) => (
     <tbody>
       {rows.map((r) => (
         <tr>
-          <td class="token"><a href={`/desk/rulings/${r.id}`}>{r.name} ({r.ticker})</a><br /><span class="muted">{r.review_type} review</span></td>
+          <td class="token"><a href={`/desk/rulings/${r.id}`}>{r.name} ({r.ticker})</a><br /><span class="muted">{r.review_type === "Re-review" ? "Re-review" : "First review"}</span></td>
           <td><Status status={r.status} code={r.code} /></td>
           <td><Status status={r.old_status} code={r.old_code} /></td>
           <td><Comparison r={r} />{r.open_questions > 0 && <><br /><span class="flag">Question waiting</span></>}</td>
