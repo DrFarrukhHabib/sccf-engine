@@ -279,6 +279,27 @@ describe("desk pages", () => {
     expect(html).not.toContain("Re-review review");
   });
 
+  it("the draft page shows exactly what users will read", async () => {
+    await db.prepare("INSERT OR IGNORE INTO public_fields (ruling_id, what, why, how, know, usage_line, card_json) VALUES ('D-change', 'an exchange token', 'Its platform is built on interest.', 'Do not hold it.', 'No concerns found.', 'Do not hold, buy or trade it.', '{\"statusLabel\":\"Haram\",\"usageLine\":\"Do not hold, buy or trade it.\"}')").run();
+    const html = await (await desk("/desk/rulings/D-change")).text();
+    expect(html).toContain("What users will read");
+    expect(html).toContain("Its platform is built on interest.");
+    expect(html).toContain("Do not hold, buy or trade it.");
+  });
+
+  it("a published ruling can be withdrawn from its page, with a note", async () => {
+    const html = await (await desk("/desk/rulings/D-match")).text();
+    expect(html).toContain('action="/desk/rulings/D-match/withdraw"');
+    expect((await desk("/desk/rulings/D-match/withdraw", form({ note: "New facts" }))).status).toBe(303);
+    expect(await isPublic(db, "D-match")).toBe(false);
+  });
+
+  it("the client keys page shows when each client last used its key and today's requests", async () => {
+    const html = await (await desk("/desk/keys")).text();
+    expect(html).toContain("Last used");
+    expect(html).toContain("Requests today");
+  });
+
   it("lists questions, rule proposals and the library", async () => {
     for (const p of ["/desk/questions", "/desk/rules", "/desk/library"]) expect((await desk(p)).status).toBe(200);
   });

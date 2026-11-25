@@ -80,6 +80,8 @@ interface DraftBody {
   confidence: "High" | "Medium" | "Low";
   supersedes?: string;
   publicFields: { what: string; why?: string; how?: string; know?: string };
+  /** The token's chains and contract addresses, as confirmed in the identity step. */
+  networks?: { network: string; address: string }[];
   cardUrl?: string;
   /** Wrapped tokens (WRAP-4, WRAP-5): the asset whose approved ruling they take. */
   underlyingAssetId?: string;
@@ -184,6 +186,12 @@ analyst.post("/drafts", async (c) => {
   if (outcome.route) return c.json(fail(`This table routes to ${outcome.route}: submit the answers for that table`), 422);
   if (!outcome.status || !outcome.code) return c.json(fail("No status or code could be derived: raise a question for the Scholar"), 422);
 
+  // The standard record: every ruling explains what the token is, why it got this ruling, and how to use it.
+  for (const [k, label] of [["what", "what it is"], ["why", "why"], ["how", "how to use it"]] as const)
+    if (!b.publicFields?.[k]?.trim()) return c.json(fail(`publicFields.${k} (${label}) is required`), 422);
+  for (const n of b.networks ?? [])
+    if (!n?.network?.trim() || !n?.address?.trim()) return c.json(fail("Each network needs a network name and an address"), 422);
+
   // Quality floor: every "yes" cites a source, web sources carry an access date, and a draft rests on at least two web sources.
   const answered: Record<string, Answer> = { ...b.answers };
   for (const r of b.rewards ?? []) Object.assign(answered, r.answers);
@@ -223,6 +231,9 @@ analyst.post("/drafts", async (c) => {
       .bind(id, b.publicFields.what, b.publicFields.why ?? null, b.publicFields.how ?? null, b.publicFields.know ?? null, card.usageLine, JSON.stringify(card)),
     db.prepare("INSERT INTO events (asset_id, ruling_id, type, at, detail) VALUES (?, ?, ?, ?, ?)")
       .bind(b.assetId, id, reviewType, now, `Draft prepared: ${outcome.status}, ${outcome.code} via ${outcome.decidingCheckId}`),
+    ...(b.networks ?? []).map((n) =>
+      db.prepare("INSERT OR IGNORE INTO network_addresses (asset_id, network, address, source, checked_at) VALUES (?, ?, ?, 'analyst', ?)")
+        .bind(b.assetId, n.network.trim(), n.address.trim(), now)),
   ]);
 
   return c.json({ rulingId: id, ...outcome }, 201);

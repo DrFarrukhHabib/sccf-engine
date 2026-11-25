@@ -27,6 +27,8 @@ async function sign(db: D1Database, r: RulingRow, role: "approved" | "standing",
   await db.batch([
     db.prepare("INSERT INTO signatures (ruling_id, role, by_whom, at) VALUES (?, ?, ?, ?)").bind(r.id, role, by, at),
     db.prepare("INSERT INTO events (asset_id, ruling_id, type, at, detail) VALUES (?, ?, 'Approval', ?, ?)").bind(r.asset_id, r.id, at, detail),
+    // Every approval starts the six-month clock to the next review.
+    db.prepare("UPDATE assets SET next_review = date(?, '+6 months') WHERE id = ?").bind(at, r.asset_id),
   ]);
 }
 
@@ -50,6 +52,20 @@ export async function returnWithNote(db: D1Database, rulingId: string, note: str
   await db
     .prepare("INSERT INTO events (asset_id, ruling_id, type, at, detail) VALUES (?, ?, 'Return', ?, ?)")
     .bind(r.asset_id, r.id, now(), note.trim())
+    .run();
+}
+
+/**
+ * The Scholar withdraws a published ruling, with a note. It stops being public at once; the token's
+ * previous approved ruling, if any, applies again. Recorded like a return, so every query treats it alike.
+ */
+export async function withdraw(db: D1Database, rulingId: string, note: string): Promise<void> {
+  if (!note?.trim()) throw new Refused("A withdrawal needs a note");
+  const r = await getRuling(db, rulingId);
+  if (!(await isPublic(db, r.id))) throw new Refused(`Ruling ${r.id} is not published, so it cannot be withdrawn`);
+  await db
+    .prepare("INSERT INTO events (asset_id, ruling_id, type, at, detail) VALUES (?, ?, 'Return', ?, ?)")
+    .bind(r.asset_id, r.id, now(), `Withdrawn: ${note.trim()}`)
     .run();
 }
 

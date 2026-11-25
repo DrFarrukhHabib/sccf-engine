@@ -39,14 +39,14 @@ Re-reviews in `reReviews` come after the batch, up to 15 per run. The wave is fr
 
 ## One review
 
-1. **Identity.** Confirm the token: name, ticker, an official or recognised source, chains and contracts.
+1. **Identity.** Confirm the token: name, ticker, an official or recognised source, and its chains and contract addresses from the official docs or a block explorer. Submit them as `networks: [{network, address}]` (e.g. `{"network": "Ethereum", "address": "0x…"}`); clients use them to find the token. A native coin with no contract gives its chain with address `native`.
 2. **Class.** Pick the catalog section for what the token gives its holder (FIAT, CRYPTO, GOLD, NATIVE, WRAP, LST, EXCH, RWA, LAUNCH, DM, UTIL, GAME, FAN, SOCIAL, NFT, DEBT, INS, INDEX, MEME, STOCK). Wrapped or bridged copies start at ZERO-2 and are ruled through WRAP.
 3. **Answer every check** from `GET /catalog?section=ZERO,<KEY>`: ZERO-1 to ZERO-4 first, then the class section in its order. Put the ZERO answers in the same `answers` object; the engine refuses a draft without them, and ZERO alone can decide the outcome (Doubtful D1, Haram R7) or send it to WRAP. Answer with `yes`, `no` or `not_found`. Never guess: a fact you could not find is `not_found`. Fraud checks (OUT, FIAT-4) count only proven findings by regulators or courts.
 4. **Evidence.** Give `{evidence, sourceUrl, accessedAt}` for every answer you researched. The engine refuses a draft that breaks the research standard below.
 5. **Rewards.** If the token has reward programmes, answer the REWARD (stablecoins) or AIR (airdrops) table in `rewards`.
 6. **Codes.** Where a check's outcome is "coded by that business" (NATIVE-1, LST-4, EXCH-1, INDEX-2/3/4, AIR), give the code in `codes`; otherwise the engine sends it to the Scholar without one.
-7. **Public fields.** `what` (the class in plain words, completing "What it is: …"), `why`, `how`, `know`. Plain words; no codes, rule numbers, exact figures, names, tool names, charity or version numbers. The engine refuses a draft that breaks these rules.
-8. **Submit** `POST /drafts` with `{assetId, section, answers, evidence, rewards, codes, confidence, publicFields, cardUrl, supersedes}` (`supersedes` = the earlier ruling id for a re-review).
+7. **Public fields** (the summary every client shows; the Scholar approves it with the ruling). `what` (completes "What it is: …"), `why` (why this ruling, one or two sentences), `how` (how a user may or may not use it) are required; `know` (things to know) is optional. Plain words; no codes, rule numbers, exact figures, names, tool names, charity or version numbers. The engine refuses a draft that breaks these rules.
+8. **Submit** `POST /drafts` with `{assetId, section, answers, evidence, rewards, codes, confidence, publicFields, networks, cardUrl, supersedes}` (`supersedes` = the earlier ruling id for a re-review).
 
 If the engine answers `422` because the table routes elsewhere (for example FIAT-2 to CRYPTO), submit the routed table. If it says no status could be derived, raise a question.
 
