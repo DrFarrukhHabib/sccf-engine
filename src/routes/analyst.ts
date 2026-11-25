@@ -6,9 +6,13 @@ import { buildPublic } from "../public/build";
 import { assertPublicSafe } from "../public/guard";
 import { deriveOutcome } from "../rules/derive";
 import type { Bindings } from "../index";
+import { backfillList } from "../backfill";
+import { weeklyReport } from "../report";
 import { fastLane, MATCHES, RANKS } from "../waves";
 
 const BATCH = 15;
+/** Older approved rulings re-reviewed per run to complete the standard record. */
+const BACKFILL = 10;
 /** Analysts may log these; approvals and returns come only from the review desk. */
 const ANALYST_EVENTS = ["First", "Re-review", "Trigger", "Migration", "Note"];
 
@@ -29,6 +33,19 @@ analyst.use("*", async (c, next) => {
   const given = c.req.header("Authorization")?.replace(/^Bearer /, "") ?? "";
   if (!c.env.ANALYST_KEY || !(await sameKey(given, c.env.ANALYST_KEY))) return c.json(fail("Unauthorized"), 401);
   await next();
+});
+
+/** A refused draft is logged on its token, so the weekly report shows what the analyst got wrong. */
+analyst.use("/drafts", async (c, next) => {
+  await next();
+  if (c.req.method !== "POST" || c.res.status !== 422) return;
+  try {
+    const b = await c.req.json<{ assetId?: string }>();
+    const { error } = (await c.res.clone().json()) as { error?: string };
+    const asset = b.assetId && (await c.env.DB.prepare("SELECT id FROM assets WHERE id = ?").bind(b.assetId).first());
+    if (asset) await c.env.DB.prepare("INSERT INTO events (asset_id, type, at, detail) VALUES (?, 'Refused', ?, ?)")
+      .bind(b.assetId, new Date().toISOString(), error ?? "refused").run();
+  } catch { /* logging never blocks the answer */ }
 });
 
 /** The live check questions, so the analyst answers exactly what the engine derives from. `?section=ZERO,FIAT` narrows it. */
@@ -67,8 +84,12 @@ analyst.get("/queue", async (c) => {
        ORDER BY k.rank LIMIT ?`,
     )
     .bind(BATCH).all();
-  return c.json({ requests: requests.results, fastLane: lane, firstReviews: firstReviews.results, reReviews: reReviews.results, unlisted: unlisted.results });
+  const backfill = await backfillList(db, BACKFILL);
+  return c.json({ requests: requests.results, fastLane: lane, firstReviews: firstReviews.results, reReviews: reReviews.results, unlisted: unlisted.results, backfill });
 });
+
+/** The week's work in numbers, for the weekly check-in. */
+analyst.get("/report", async (c) => c.json(await weeklyReport(c.env.DB, c.req.query("days"))));
 
 interface DraftBody {
   assetId: string;

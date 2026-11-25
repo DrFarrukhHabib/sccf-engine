@@ -6,6 +6,7 @@ import { approve, isPublic, Refused, returnWithNote, withdraw } from "../review/
 import { compare } from "../review/compare";
 import type { Bindings } from "../index";
 import { fastLane, freezeWave, waveProgress } from "../waves";
+import { weeklyReport } from "../report";
 import { CardPage, KeysPage, LibraryPage, QuestionsPage, QueuePage, RulesPage, RulingPage } from "../views/pages";
 
 export interface DeskOptions {
@@ -187,6 +188,8 @@ export function createDesk(opts: DeskOptions = {}) {
          COALESCE((SELECT u.requests FROM api_usage u WHERE u.client_id = c.id AND u.day = date('now')), 0) AS requests_today
        FROM api_clients c ORDER BY c.created_at`,
     ).all()).results;
+
+  desk.get("/report", async (c) => c.json(await weeklyReport(c.env.DB, c.req.query("days"))));
 
   desk.get("/keys", async (c) => c.html(<KeysPage clients={await clients(c.env.DB)} />));
 
