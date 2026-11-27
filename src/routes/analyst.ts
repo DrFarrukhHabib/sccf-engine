@@ -157,6 +157,8 @@ analyst.post("/drafts", async (c) => {
   const b = await c.req.json<DraftBody>();
   const asset = await db.prepare("SELECT id FROM assets WHERE id = ?").bind(b.assetId).first();
   if (!asset) return c.json(fail(`Unknown asset ${b.assetId}`), 422);
+  if (b.networks !== undefined && !Array.isArray(b.networks)) return c.json(fail("networks must be a list: [{network, address}]"), 422);
+  if (b.rewards !== undefined && !Array.isArray(b.rewards)) return c.json(fail("rewards must be a list: [{section, answers}]"), 422);
 
   if (b.supersedes) {
     const prev = await db.prepare("SELECT asset_id FROM rulings WHERE id = ?").bind(b.supersedes).first<{ asset_id: string }>();

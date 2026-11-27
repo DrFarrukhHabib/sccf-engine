@@ -157,6 +157,15 @@ describe("analyst door", () => {
     expect((await post("/analyst/questions", { ...goodQuestion, options: ["Only one"] })).status).toBe(422);
   });
 
+  it("refuses networks or rewards sent as something other than a list, with a clear message", async () => {
+    const net = await rawPost("/analyst/drafts", { ...sourced(usdcDraft), networks: { network: "Ethereum", address: "0xabc" } });
+    expect(net.status).toBe(422);
+    expect(((await net.json()) as any).error).toMatch(/networks must be a list/);
+    const rew = await rawPost("/analyst/drafts", { ...sourced(usdcDraft), rewards: { section: "REWARD", answers: {} } });
+    expect(rew.status).toBe(422);
+    expect(((await rew.json()) as any).error).toMatch(/rewards must be a list/);
+  });
+
   it("refuses a draft without the ZERO answers", async () => {
     const { "ZERO-3": _drop, ...partial } = usdcDraft.answers;
     const res = await post("/analyst/drafts", { ...usdcDraft, answers: partial });

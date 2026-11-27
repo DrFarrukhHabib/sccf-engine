@@ -242,11 +242,16 @@ export const RulingPage = ({ r, checks, changes, previous, isOpen, questions, de
     )}
 
     {published && (
-      <Section cls="s-chg" title="Withdraw this published ruling">
-        <form method="post" action={`/desk/rulings/${r.id}/withdraw`}>
-          <p class="muted" style="margin:0 0 8px">It stops being public at once and every client is told. The token's previous approved ruling, if any, applies again.</p>
-          <textarea name="note" rows={2} required placeholder="Why it is withdrawn"></textarea>
-          <p style="margin:8px 0 0"><button class="ghost">Withdraw</button></p>
+      <Section cls="s-chg" title="Reopen or withdraw this ruling">
+        <form method="post" action={`/desk/rulings/${r.id}/reopen`}>
+          <p class="muted" style="margin:0 0 8px">Write what is wrong or what the AI Analyst should check. Reopening sends your note to the AI Analyst as an answer: on its next run it redrafts this token following it, and the new draft comes back to you.</p>
+          <textarea name="note" rows={3} required placeholder="What is wrong, or what should be checked again"></textarea>
+          <p style="margin:8px 0 0;display:flex;gap:8px;flex-wrap:wrap">
+            <button name="action" value="withdraw">Withdraw now and redraft</button>
+            <button name="action" value="keep" class="ghost">Redraft, keep it public meanwhile</button>
+            <button formaction={`/desk/rulings/${r.id}/withdraw`} class="ghost">Withdraw only</button>
+          </p>
+          <p class="muted" style="margin:8px 0 0">Withdrawing stops it being public at once and every client is told; the token's previous approved ruling, if any, applies again.</p>
         </form>
       </Section>
     )}
@@ -325,7 +330,7 @@ export const LibraryPage = ({ rows }: { rows: Row[] }) => {
             <tbody>
               {rows.map((r) => (
                 <tr>
-                  <td class="token">{r.name} ({r.ticker})<br /><span class="muted">{r.id}</span></td>
+                  <td class="token"><a href={`/desk/rulings/${r.ruling_id}`}>{r.name} ({r.ticker})</a><br /><span class="muted">{r.id}</span></td>
                   <td>{r.class}</td>
                   <td><Status status={r.status} code={r.code} /></td>
                   <td>{String(r.approved ?? "").slice(0, 10)}</td>
