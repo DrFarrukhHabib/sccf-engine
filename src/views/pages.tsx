@@ -16,13 +16,39 @@ export const Comparison = ({ r }: { r: Row }) =>
     : <span class="changed">Changed: {r.old_status} → {r.status}</span>;
 
 /** One open question: its options as buttons that fill the answer box, an Other choice, and Save. */
+/** A question's background: structured (what it is, facts found, not found) or older plain text kept line by line. */
+const QuestionContext = ({ context }: { context: string | null }) => {
+  if (!context) return null;
+  let s: { about?: string; facts?: { text: string; source?: string }[]; notFound?: string[] } | null = null;
+  if (context.trim().startsWith("{")) { try { s = JSON.parse(context); } catch { s = null; } }
+  if (!s || !s.about) return <div class="ctx">{context.split(/\n+/).filter((l) => l.trim()).map((l) => <p>{l}</p>)}</div>;
+  return (
+    <div class="ctx">
+      <p class="lbl">What it is</p>
+      <p>{s.about}</p>
+      {(s.facts ?? []).length > 0 && (
+        <>
+          <p class="lbl">Facts found</p>
+          <ul>{(s.facts ?? []).map((f) => <li>{f.text}{f.source && /^https?:\/\//.test(f.source) && <> <a href={f.source} target="_blank" rel="noopener">source</a></>}</li>)}</ul>
+        </>
+      )}
+      {(s.notFound ?? []).length > 0 && (
+        <>
+          <p class="lbl">Not found</p>
+          <ul>{(s.notFound ?? []).map((n) => <li>{n}</li>)}</ul>
+        </>
+      )}
+    </div>
+  );
+};
+
 export const QuestionBox = ({ q, back }: { q: Row; back?: string }) => {
   const options = optionsOf(q.options);
   return (
     <div class="card qcard">
       <p class="who">{q.asset_name ? `${q.asset_name} (${q.asset_id})` : q.asset_id ?? "General question"}</p>
       <p class="ask">{q.question}</p>
-      {q.context && <p class="ctx">{q.context}</p>}
+      <QuestionContext context={q.context} />
       <form method="post" action={`/desk/questions/${q.id}/answer`}>
         {back && <input type="hidden" name="back" value={back} />}
         {options.length > 0 && (
@@ -41,7 +67,7 @@ export const QuestionBox = ({ q, back }: { q: Row; back?: string }) => {
   );
 };
 
-const DraftTable = ({ rows }: { rows: Row[] }) => (
+const DraftTable = ({ rows, approve = false }: { rows: Row[]; approve?: boolean }) => (
   <table>
     <thead><tr><th>Token</th><th>New result</th><th>Old system</th><th>Compared</th><th>Confidence</th><th></th></tr></thead>
     <tbody>
@@ -52,7 +78,15 @@ const DraftTable = ({ rows }: { rows: Row[] }) => (
           <td><Status status={r.old_status} code={r.old_code} /></td>
           <td><Comparison r={r} />{r.open_questions > 0 && <><br /><span class="flag">Question waiting</span></>}</td>
           <td>{r.confidence}</td>
-          <td><a class="btn" href={`/desk/rulings/${r.id}`}>Open</a></td>
+          <td class="acts">
+            <a class="btn" href={`/desk/rulings/${r.id}`}>Open</a>
+            {approve && (
+              <form method="post" action={`/desk/rulings/${r.id}/approve`} class="inline">
+                <input type="hidden" name="back" value="/desk/queue" />
+                <button class="approve" disabled={r.open_questions > 0} title={r.open_questions > 0 ? "Answer the waiting question first" : "Approve this draft"}>Approve</button>
+              </form>
+            )}
+          </td>
         </tr>
       ))}
     </tbody>
@@ -131,7 +165,7 @@ export const QueuePage = ({ drafts, returned, questions, approved, eligible, pro
               <span><b>{eligible}</b> of these have High confidence and no open question.</span>
               <button class="approve" disabled={eligible === 0}>Approve these ({eligible})</button>
             </form>
-            <DraftTable rows={same} />
+            <DraftTable rows={same} approve />
           </>
         )}
       </Section>

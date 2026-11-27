@@ -131,11 +131,30 @@ describe("analyst door", () => {
     expect((await db.prepare("SELECT COUNT(*) AS n FROM signatures").first<{ n: number }>())!.n).toBe(before);
   });
 
-  it("stores a question for the Scholar", async () => {
-    const res = await post("/analyst/questions", { assetId: "SCCF-0200", question: "Is DOGE still mainly speculative?", options: ["Yes", "No"] });
+  const goodQuestion = {
+    assetId: "SCCF-0200", question: "Is DOGE still mainly speculative?",
+    about: "DOGE is the coin of the Dogecoin chain, which began as a joke.",
+    facts: [{ text: "Most trading volume is on exchanges.", source: "https://example.com/a" }],
+    notFound: ["Any merchant-use figures"],
+    options: ["Yes: Doubtful D3", "No: Halal H1"],
+  };
+
+  it("stores a structured question for the Scholar", async () => {
+    const res = await post("/analyst/questions", goodQuestion);
     expect(res.status).toBe(201);
-    const q = await db.prepare("SELECT question, options_json FROM questions WHERE asset_id = 'SCCF-0200'").first();
-    expect(q).toEqual({ question: "Is DOGE still mainly speculative?", options_json: '["Yes","No"]' });
+    const q = await db.prepare("SELECT question, context, options_json FROM questions WHERE asset_id = 'SCCF-0200'").first<any>();
+    expect(q.question).toBe("Is DOGE still mainly speculative?");
+    expect(JSON.parse(q.context)).toEqual({ about: goodQuestion.about, facts: goodQuestion.facts, notFound: goodQuestion.notFound });
+    expect(q.options_json).toBe('["Yes: Doubtful D3","No: Halal H1"]');
+  });
+
+  it("refuses a question that is too long, or has no plain description or facts", async () => {
+    const long = await post("/analyst/questions", { ...goodQuestion, question: "x".repeat(301) });
+    expect(long.status).toBe(422);
+    expect(((await long.json()) as any).error).toMatch(/300/);
+    expect((await post("/analyst/questions", { ...goodQuestion, about: "" })).status).toBe(422);
+    expect((await post("/analyst/questions", { ...goodQuestion, facts: [] })).status).toBe(422);
+    expect((await post("/analyst/questions", { ...goodQuestion, options: ["Only one"] })).status).toBe(422);
   });
 
   it("refuses a draft without the ZERO answers", async () => {

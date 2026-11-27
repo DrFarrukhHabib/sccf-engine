@@ -261,11 +261,26 @@ analyst.post("/drafts", async (c) => {
 });
 
 analyst.post("/questions", async (c) => {
-  const b = await c.req.json<{ assetId?: string; rulingId?: string; question: string; context?: string; options?: string[] }>();
-  if (!b.question?.trim()) return c.json(fail("A question is required"), 422);
+  const b = await c.req.json<{
+    assetId?: string; rulingId?: string; question?: string; about?: string;
+    facts?: { text?: string; source?: string }[]; notFound?: string[]; options?: string[];
+  }>();
+  const question = b.question?.trim() ?? "";
+  if (!question) return c.json(fail("A question is required"), 422);
+  if (question.length > 300)
+    return c.json(fail("Keep the question to one short sentence of at most 300 characters; put the background in about, facts and notFound"), 422);
+  const about = b.about?.trim() ?? "";
+  if (!about) return c.json(fail("about is required: two or three plain sentences on what the token or project is"), 422);
+  const facts = (Array.isArray(b.facts) ? b.facts : [])
+    .filter((f) => f?.text?.trim())
+    .map((f) => ({ text: f.text!.trim(), ...(f.source?.trim() ? { source: f.source.trim() } : {}) }));
+  if (facts.length === 0) return c.json(fail("facts is required: at least one fact found, each {text, source}"), 422);
+  const notFound = (Array.isArray(b.notFound) ? b.notFound : []).map((n) => String(n).trim()).filter(Boolean);
+  const options = Array.isArray(b.options) ? b.options.map((o) => String(o).trim()).filter(Boolean) : [];
+  if (b.options && (options.length < 2 || options.length > 5)) return c.json(fail("Give 2 to 5 options, or none"), 422);
   const id = crypto.randomUUID();
   await c.env.DB.prepare("INSERT INTO questions (id, asset_id, ruling_id, question, context, options_json) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(id, b.assetId ?? null, b.rulingId ?? null, b.question.trim(), b.context ?? null, b.options ? JSON.stringify(b.options) : null)
+    .bind(id, b.assetId ?? null, b.rulingId ?? null, question, JSON.stringify({ about, facts, notFound }), options.length ? JSON.stringify(options) : null)
     .run();
   return c.json({ id }, 201);
 });
