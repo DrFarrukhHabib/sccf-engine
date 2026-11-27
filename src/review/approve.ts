@@ -70,6 +70,28 @@ export async function withdraw(db: D1Database, rulingId: string, note: string): 
 }
 
 /**
+ * The Scholar reopens a published ruling with an instruction. The instruction is stored as an answered
+ * question, so the AI Analyst picks it up first on its next run, redrafts the token following it and cites it.
+ * With `withdrawNow` the ruling also stops being public at once (as a withdrawal); otherwise it stays public
+ * until the new ruling is approved.
+ */
+export async function reopen(db: D1Database, rulingId: string, note: string, withdrawNow: boolean): Promise<void> {
+  const text = note?.trim();
+  if (!text) throw new Refused("Reopening needs a note: what should the AI Analyst change or check?");
+  const r = await getRuling(db, rulingId);
+  if (!(await isPublic(db, r.id))) throw new Refused(`Ruling ${r.id} is not published, so it cannot be reopened`);
+  const at = now();
+  await db.batch([
+    ...(withdrawNow
+      ? [db.prepare("INSERT INTO events (asset_id, ruling_id, type, at, detail) VALUES (?, ?, 'Return', ?, ?)").bind(r.asset_id, r.id, at, `Withdrawn: ${text}`)]
+      : []),
+    db.prepare(`INSERT INTO questions (id, asset_id, ruling_id, question, answer, answered_at, applied)
+      VALUES (?, ?, ?, 'Reopened by the Scholar: redraft this token following the answer.', ?, ?, 0)`)
+      .bind(crypto.randomUUID(), r.asset_id, r.id, text, at),
+  ]);
+}
+
+/**
  * Confirms an unchanged re-review under the Scholar's standing approval.
  * Refuses anything that must reach the Scholar: a changed status or code, an open question,
  * Low confidence, D1, a Scholar item, an unstructured import, or no approved earlier ruling.

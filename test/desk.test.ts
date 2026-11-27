@@ -363,3 +363,45 @@ describe("questions are easy to read", () => {
     expect(html).toContain("<p>First line.</p><p>Second line.</p>");
   });
 });
+
+describe("reopening a published ruling", () => {
+  const publish = async (asset: string, ruling: string) => {
+    await db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class, old_status, old_code) VALUES (?, ?, ?, 'FIAT', 'Halal', 'H2')").bind(asset, `Coin ${asset}`, asset.slice(-3)).run();
+    await db.prepare(`INSERT INTO rulings (id, asset_id, criteria_version, status, code, confidence, review_type, deciding_check, created_at)
+      VALUES (?, ?, '1.0', 'Doubtful', 'D5', 'Medium', 'First', 'FIAT-4', '2026-11-26')`).bind(ruling, asset).run();
+    await db.prepare("INSERT INTO signatures (ruling_id, role, by_whom, at) VALUES (?, 'approved', 'Shariah Scholar', '2026-11-27T05:00:00Z')").bind(ruling).run();
+  };
+
+  it("the Approved list links each token to its ruling page", async () => {
+    await publish("SCCF-0950", "P-1");
+    expect(await (await desk("/desk/library")).text()).toContain('href="/desk/rulings/P-1"');
+  });
+
+  it("a published ruling page offers to reopen it, with a note", async () => {
+    const html = await (await desk("/desk/rulings/P-1")).text();
+    expect(html).toContain('action="/desk/rulings/P-1/reopen"');
+    expect((await desk("/desk/rulings/P-1/reopen", form({ note: "", action: "withdraw" }))).status).toBe(422);
+  });
+
+  it("reopen and withdraw now: the ruling stops being public and the AI Analyst gets the Scholar's instruction as an answer", async () => {
+    const res = await desk("/desk/rulings/P-1/reopen", form({ note: "FIAT-4 should be no: the past finding was settled.", action: "withdraw" }));
+    expect(res.status).toBe(303);
+    expect(await isPublic(db, "P-1")).toBe(false);
+    const q = await db.prepare("SELECT question, answer, answered_at, applied, ruling_id FROM questions WHERE asset_id = 'SCCF-0950'").first<any>();
+    expect(q).toMatchObject({ question: "Reopened by the Scholar: redraft this token following the answer.", answer: "FIAT-4 should be no: the past finding was settled.", applied: 0, ruling_id: "P-1" });
+    expect(q.answered_at).toBeTruthy();
+  });
+
+  it("reopen and keep public: the ruling stays public until the new one is approved", async () => {
+    await publish("SCCF-0951", "P-2");
+    expect((await desk("/desk/rulings/P-2/reopen", form({ note: "Check the new audit.", action: "keep" }))).status).toBe(303);
+    expect(await isPublic(db, "P-2")).toBe(true);
+    expect((await db.prepare("SELECT answer FROM questions WHERE asset_id = 'SCCF-0951'").first<any>())?.answer).toBe("Check the new audit.");
+  });
+
+  it("a draft that is not published cannot be reopened", async () => {
+    await db.prepare(`INSERT INTO rulings (id, asset_id, criteria_version, status, code, confidence, review_type, deciding_check, created_at)
+      VALUES ('P-draft', 'SCCF-0951', '1.0', 'Halal', 'H2', 'High', 'Re-review', 'FIAT-6', '2026-11-27')`).run();
+    expect((await desk("/desk/rulings/P-draft/reopen", form({ note: "x", action: "keep" }))).status).toBe(422);
+  });
+});

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { certsProvider, verifyAccess, type AccessConfig, type KeyProvider } from "../auth/access";
 import { hashKey, newKey } from "../auth/keys";
 import type { Answer } from "../db/types";
-import { approve, isPublic, Refused, returnWithNote, withdraw } from "../review/approve";
+import { approve, isPublic, Refused, reopen, returnWithNote, withdraw } from "../review/approve";
 import { compare } from "../review/compare";
 import type { Bindings } from "../index";
 import { fastLane, freezeWave, waveProgress } from "../waves";
@@ -132,6 +132,7 @@ export function createDesk(opts: DeskOptions = {}) {
   desk.post("/rulings/:id/approve", act((db, id, _f, by) => approve(db, id, by)));
   desk.post("/rulings/:id/return", act((db, id, f) => returnWithNote(db, id, f.note ?? "")));
   desk.post("/rulings/:id/withdraw", act((db, id, f) => withdraw(db, id, f.note ?? "")));
+  desk.post("/rulings/:id/reopen", act((db, id, f) => reopen(db, id, f.note ?? "", f.action === "withdraw")));
 
   desk.post("/requests/token", act(async (db, _id, f) => {
     const name = f.name?.trim(), ticker = f.ticker?.trim().toUpperCase();
@@ -173,7 +174,7 @@ export function createDesk(opts: DeskOptions = {}) {
 
   desk.get("/library", async (c) => {
     const { results } = await c.env.DB.prepare(
-      `SELECT a.id, a.name, a.ticker, a.class, r.status, r.code, s.at AS approved
+      `SELECT a.id, a.name, a.ticker, a.class, r.id AS ruling_id, r.status, r.code, s.at AS approved
        FROM assets a JOIN rulings r ON r.asset_id = a.id JOIN signatures s ON s.ruling_id = r.id AND s.role IN ('approved','standing')
        WHERE NOT EXISTS (SELECT 1 FROM rulings n JOIN signatures ns ON ns.ruling_id = n.id AND ns.role IN ('approved','standing')
                          WHERE n.asset_id = a.id AND ns.at > s.at)

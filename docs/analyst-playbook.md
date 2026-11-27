@@ -25,7 +25,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 
 ## Start of every run: the Scholar's answers
 
-Before any new work, `GET /answers`. For each answer, do what it says: usually submit a fresh draft for that token that follows the answer, with `supersedes` = its `latestRulingId`, or log a `Note` event if nothing needs to change. For the check the answer decides, cite the answer itself as the source: `sourceUrl: "scholar-answer:<question id>"`. Then `POST /questions/:id/applied`. The Scholar's answer is final for that token; never argue it back. (If you forget `supersedes`, the engine links the draft to the token's open draft itself.)
+Before any new work, `GET /answers`. For each answer, do what it says: usually submit a fresh draft for that token that follows the answer, with `supersedes` = its `latestRulingId`, or log a `Note` event if nothing needs to change. For the check the answer decides, cite the answer itself as the source: `sourceUrl: "scholar-answer:<question id>"`. Then `POST /questions/:id/applied`. The Scholar's answer is final for that token; never argue it back. An answer to "Reopened by the Scholar" always needs a fresh full draft of that token that follows his note, even if the ruling is unchanged. (If you forget `supersedes`, the engine links the draft to the token's open draft itself.)
 
 ## Asking the Scholar
 
