@@ -18,7 +18,7 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 | `POST /drafts` | Submit one review (below). The engine derives the outcome, builds the public card and stores a draft. |
 | `GET /answers` | The Scholar's answers you have not yet acted on: `[{id, asset_id, ruling_id, question, answer, latestRulingId}]`. `latestRulingId` is the token's newest ruling: put it in `supersedes` when you redraft. |
 | `POST /questions/:id/applied` | Mark an answer as acted on, once you have done what it says. |
-| `POST /questions` | A question for the Scholar: `{assetId, question, context, options}`. |
+| `POST /questions` | A question for the Scholar: `{assetId, question, about, facts, notFound, options}`. See "Asking the Scholar". |
 | `POST /events` | Log a `First`, `Re-review`, `Trigger`, `Migration` or `Note` event. |
 | `GET /report?days=7` | The week's work in numbers (drafts, approvals, refusals, questions, wave and backfill progress). Used by the weekly check-in. |
 | `POST /snapshot` | Store a CoinMarketCap rank snapshot (`{listings}` or empty to fetch with the engine's key). |
@@ -26,6 +26,18 @@ Base URL: `https://sccf-engine.doctorfarrukhhabib.workers.dev/analyst`. In the S
 ## Start of every run: the Scholar's answers
 
 Before any new work, `GET /answers`. For each answer, do what it says: usually submit a fresh draft for that token that follows the answer, with `supersedes` = its `latestRulingId`, or log a `Note` event if nothing needs to change. For the check the answer decides, cite the answer itself as the source: `sourceUrl: "scholar-answer:<question id>"`. Then `POST /questions/:id/applied`. The Scholar's answer is final for that token; never argue it back. (If you forget `supersedes`, the engine links the draft to the token's open draft itself.)
+
+## Asking the Scholar
+
+The Scholar reads each question on the desk in a few seconds, so write it for him, not for yourself. The engine refuses a question without these parts:
+
+- `question`: one short sentence, at most 300 characters, asking exactly what he must decide. Example: "Which table should rule CARDS, and does its random-pack product make the token Haram (R3), Doubtful, or only a use condition?"
+- `about`: two or three plain sentences on what the token and its project are, as you would explain them to someone who has never heard of it.
+- `facts`: the facts that bear on the decision, one per item: `{text, source}`, each a single plain sentence with its page. Three to six is usual. No contract addresses, tables or long quotes.
+- `notFound`: what you looked for and could not find, one short item each.
+- `options`: two to five answers he can pick with one click, each naming the result in plain words with its code (e.g. "UTIL: Halal with a use condition (H2)").
+
+Explain codes and table names in plain words the first time they appear. Do not put your reasoning about catalog rows in the question; the options carry it.
 
 ## Choosing the batch
 

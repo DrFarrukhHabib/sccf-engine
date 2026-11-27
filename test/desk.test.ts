@@ -180,6 +180,16 @@ describe("desk pages", () => {
     expect(html).toContain("Same as before");
   });
 
+  it("each matching draft has its own Approve button beside Open; changed drafts do not", async () => {
+    const html = await (await desk("/desk/queue")).text();
+    expect(html).toContain('action="/desk/rulings/D-match/approve"');
+    expect(html).not.toContain('action="/desk/rulings/D-change/approve"');
+    const res = await desk("/desk/rulings/D-match/approve", form({ back: "/desk/queue" }));
+    expect(res.status).toBe(303);
+    expect(res.headers.get("Location")).toBe("/desk/queue");
+    expect(await isPublic(db, "D-match")).toBe(true);
+  });
+
   it("Approve all matching approves only High-confidence matches with no open question", async () => {
     await db.batch([
       db.prepare("INSERT OR IGNORE INTO assets (id, name, ticker, class, old_status, old_code) VALUES ('SCCF-0903', 'Asked Coin', 'ASK', 'UTIL', 'Halal', 'H1')"),
@@ -188,9 +198,10 @@ describe("desk pages", () => {
     ]);
     await draft("D-asked", "SCCF-0903", "Halal", "H1");
     await draft("D-unsure", "SCCF-0904", "Halal", "H1", "Medium");
+    await draft("D-match2", "SCCF-0901", "Halal", "H1");
     const res = await desk("/desk/approve-matching", form({}));
     expect(res.status).toBe(303);
-    expect(await isPublic(db, "D-match")).toBe(true);
+    expect(await isPublic(db, "D-match2")).toBe(true);
     for (const id of ["D-change", "D-asked", "D-unsure"]) expect(await isPublic(db, id)).toBe(false);
   });
 
@@ -325,5 +336,30 @@ describe("Najm Screener names on the desk", () => {
     expect(html).toContain("Rule changes");
     expect(html).not.toContain("SCCF Review Desk");
     expect(html).not.toContain("Azka");
+  });
+});
+
+describe("questions are easy to read", () => {
+  it("a structured question shows the short question, what the token is, the facts found with sources, and what was not found", async () => {
+    const ctx = JSON.stringify({
+      about: "CARDS is the platform token of a trading-card business.",
+      facts: [{ text: "Its main product is a random card pack (gacha).", source: "https://docs.example.com/product-info" }, { text: "Fixed supply of 2 billion." }],
+      notFound: ["The share of revenue from the gacha"],
+    });
+    await db.prepare("INSERT INTO questions (id, asset_id, question, context, options_json) VALUES ('Q-struct', 'SCCF-0104', 'Which table should rule CARDS?', ?, '[\"EXCH\",\"UTIL\"]')").bind(ctx).run();
+    const html = await (await desk("/desk/questions")).text();
+    expect(html).toContain("Which table should rule CARDS?");
+    expect(html).toContain("What it is");
+    expect(html).toContain("CARDS is the platform token of a trading-card business.");
+    expect(html).toContain("<li>Its main product is a random card pack (gacha).");
+    expect(html).toContain('href="https://docs.example.com/product-info"');
+    expect(html).toContain("Not found");
+    expect(html).toContain("<li>The share of revenue from the gacha</li>");
+  });
+
+  it("an older plain-text question keeps its line breaks", async () => {
+    await db.prepare("INSERT INTO questions (id, asset_id, question, context) VALUES ('Q-plain', 'SCCF-0104', 'Plain one', ?)").bind("First line.\nSecond line.").run();
+    const html = await (await desk("/desk/questions")).text();
+    expect(html).toContain("<p>First line.</p><p>Second line.</p>");
   });
 });

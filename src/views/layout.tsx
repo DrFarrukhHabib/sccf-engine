@@ -39,7 +39,8 @@ h1{font-size:20pt;margin:8px 0 16px}h2{font-size:16pt;margin:0}h3{font-size:14pt
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
 .qcard{border-left:5px solid var(--q);background:#fffdf8}
 .qcard .who{font-weight:700;margin:0 0 4px}.qcard .ask{font-size:12.5pt;margin:0 0 6px}
-.qcard .ctx{color:var(--muted);font-size:11pt;margin:0 0 10px;white-space:pre-line}
+.qcard .ctx{color:var(--muted);font-size:11pt;margin:0 0 10px}.qcard .ctx p{margin:0 0 6px}.qcard .ctx ul{margin:0 0 8px;padding-left:20px}.qcard .ctx .lbl{font-weight:700;color:var(--ink);margin:8px 0 2px}
+.acts{white-space:nowrap}.acts form.inline{display:inline;margin:0 0 0 6px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 10px}
 .chip{font:inherit;font-size:11pt;cursor:pointer;padding:8px 14px;border-radius:10px;border:2px solid #cbd5e1;background:#fff;color:var(--ink);text-align:left}
 .chip:hover{border-color:var(--q);background:var(--q-bg)}
